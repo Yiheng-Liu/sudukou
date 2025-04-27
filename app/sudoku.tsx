@@ -46,7 +46,6 @@ export default function SudokuScreen() {
     initialPuzzleState,
     selectedCell,
     selectedNumber,
-    isErasing,
     conflicts,
     errorMessage,
     isGameWon,
@@ -55,12 +54,13 @@ export default function SudokuScreen() {
     remainingCounts,
     autoFillingCell,
     hintsRemaining,
+    isDraftMode,
+    draftMarks,
     startNewGame,
     handleSelectNumber,
-    handleSelectEraser,
-    handleClearBoard,
     handleSelectCell,
     provideHint,
+    toggleDraftMode,
   } = useSudokuGame();
 
   // Convert remainingCounts Map to an object for NumberPad prop
@@ -102,7 +102,7 @@ export default function SudokuScreen() {
         <InfoArea
           livesRemaining={livesRemaining}
           errorMessage={errorMessage}
-          isErasing={isErasing}
+          isErasing={false}
           selectedCell={selectedCell}
           selectedNumber={selectedNumber}
           isGameWon={isGameWon}
@@ -121,6 +121,7 @@ export default function SudokuScreen() {
           selectedCell={selectedCell}
           conflicts={conflicts}
           autoFillingCell={autoFillingCell}
+          draftMarks={draftMarks}
           handleSelectCell={handleSelectCell}
           isGameWon={isGameWon}
           isGameOver={isGameOver}
@@ -135,6 +136,8 @@ export default function SudokuScreen() {
             rightThickBorder: styles.rightThickBorder,
             bottomThickBorder: styles.bottomThickBorder,
             cellText: styles.cellText,
+            draftContainer: styles.draftContainer,
+            draftText: styles.draftText,
             autoFillNumber: styles.autoFillNumber,
             fixedText: styles.fixedText,
             userNumberText: styles.userNumberText,
@@ -144,26 +147,22 @@ export default function SudokuScreen() {
 
         {/* Function Buttons (Erase, Clear, New) */}
         <FunctionButtons
-          isErasing={isErasing}
-          handleSelectEraser={handleSelectEraser}
-          handleClearBoard={handleClearBoard}
           startNewGame={startNewGame}
           hintsRemaining={hintsRemaining}
           handleProvideHint={provideHint}
+          isDraftMode={isDraftMode}
+          handleToggleDraftMode={toggleDraftMode}
           isGameWon={isGameWon}
           isGameOver={isGameOver}
           styles={{
             functionButtonContainer: styles.functionButtonContainer,
             functionButton: styles.functionButton,
-            eraserButton: styles.eraserButton,
-            clearButton: styles.clearButton,
             hintButton: styles.hintButton,
+            draftButton: styles.draftButton,
+            selectedDraftButton: styles.selectedDraftButton,
             newGameButton: styles.newGameButton,
-            selectedEraserButton: styles.selectedEraserButton,
-            eraserButtonText: styles.eraserButtonText,
-            selectedEraserText: styles.selectedEraserText,
-            clearButtonText: styles.clearButtonText,
             hintButtonText: styles.hintButtonText,
+            draftButtonText: styles.draftButtonText,
             newGameButtonText: styles.newGameButtonText,
             boardDisabled: styles.boardDisabled,
           }}
@@ -339,37 +338,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minWidth: 60,
   },
-  eraserButton: {
-    backgroundColor: "#f8f9fa",
-    borderColor: "#ced4da",
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-  },
-  clearButton: {
-    backgroundColor: "#ffc107",
-    borderColor: "#e0a800",
-  },
-  newGameButton: {
-    backgroundColor: "#17a2b8",
-    borderColor: "#117a8b",
-  },
-  selectedEraserButton: {
-    backgroundColor: "#dc3545",
-    borderColor: "#bd2130",
-  },
-  eraserButtonText: {
-    fontSize: cellSize * 0.35,
-    fontWeight: "bold",
-    color: "#dc3545",
-  },
-  selectedEraserText: {
-    color: "#fff",
-  },
-  clearButtonText: {
-    fontSize: cellSize * 0.35,
-    fontWeight: "bold",
-    color: "#343a40",
-  },
   hintButton: {
     backgroundColor: "#6c757d",
     borderColor: "#5a6268",
@@ -379,10 +347,33 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#fff",
   },
+  newGameButton: {
+    backgroundColor: "#17a2b8",
+    borderColor: "#117a8b",
+  },
   newGameButtonText: {
     fontSize: cellSize * 0.35,
     fontWeight: "bold",
     color: "#fff",
+  },
+  draftButton: {
+    // Style for the draft button
+    backgroundColor: "#f8f9fa", // Similar to old eraser
+    borderColor: "#ced4da",
+    // Inherits padding/borderWidth etc from functionButton
+  },
+  selectedDraftButton: {
+    // Style when draft mode is active
+    backgroundColor: "#a2d2ff", // Lighter, distinct blue
+    borderColor: "#74b9ff", // Slightly darker blue border
+    borderWidth: 1.5, // Make border slightly thicker when active
+    elevation: 4, // Increase elevation slightly
+  },
+  draftButtonText: {
+    // Text style for draft button
+    fontSize: cellSize * 0.35,
+    fontWeight: "bold",
+    color: "#075985", // Use a color that works on light/blue bg
   },
   // --- NumberPad Styles ---
   numberPadContainer: {
@@ -508,5 +499,26 @@ const styles = StyleSheet.create({
     minWidth: 100,
     alignItems: "center",
     justifyContent: "center",
+  },
+  draftContainer: {
+    // Style for the container holding draft numbers
+    position: "absolute",
+    top: 1,
+    left: 1,
+    right: 1,
+    bottom: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 1, // Small padding
+  },
+  draftText: {
+    // Style for the small draft numbers
+    fontSize: cellSize * 0.18, // Much smaller font size
+    lineHeight: cellSize * 0.25, // Adjust line height
+    color: "#6c757d", // Dimmer color
+    textAlign: "center",
+    width: "33%", // Roughly fit 3 numbers per line
   },
 });

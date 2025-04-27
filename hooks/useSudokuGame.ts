@@ -1,6 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { isValid, generateBoard, createPuzzle } from "../utils/sudokuUtils";
+import {
+  isValid,
+  generateBoard,
+  createPuzzle,
+  peers,
+  rows,
+  cols,
+} from "../utils/sudokuUtils";
 import {
   CellValue,
   SelectedCell,
@@ -8,6 +15,9 @@ import {
   SolutionState,
   Conflicts,
 } from "../types/sudokuTypes";
+
+// Define DraftMarks type
+type DraftMarks = { [cellKey: string]: Set<number> };
 
 export function useSudokuGame() {
   const params = useLocalSearchParams();
@@ -20,7 +30,8 @@ export function useSudokuGame() {
   const [solution, setSolution] = useState<SolutionState>(null);
   const [selectedCell, setSelectedCell] = useState<SelectedCell>(null);
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
-  const [isErasing, setIsErasing] = useState<boolean>(false);
+  const [isDraftMode, setIsDraftMode] = useState<boolean>(false);
+  const [draftMarks, setDraftMarks] = useState<DraftMarks>({});
   const [conflicts, setConflicts] = useState<Conflicts>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isGameWon, setIsGameWon] = useState<boolean>(false);
@@ -89,14 +100,15 @@ export function useSudokuGame() {
             currentBoard[r][c] === 0 &&
             !isValid(validationBoard, r, c, num)
           ) {
-            newConflicts.add(`${r}-${c}`);
+            const cellKey = rows[r] + cols[c];
+            newConflicts.add(cellKey);
           }
         }
       }
       setConflicts(newConflicts);
     },
     []
-  ); // Depends on isValid, but that's stable
+  );
 
   // --- Game Logic Handlers ---
   const startNewGame = useCallback(() => {
@@ -113,26 +125,44 @@ export function useSudokuGame() {
     setSolution(null);
     setSelectedCell(null);
     setSelectedNumber(null);
-    setIsErasing(false);
+    setIsDraftMode(false);
+    setDraftMarks({});
     setConflicts(new Set());
 
-    let difficulty = 45;
-    if (typeof difficultyParam === "string") {
-      const parsedDifficulty = parseInt(difficultyParam, 10);
-      if (
-        !isNaN(parsedDifficulty) &&
-        parsedDifficulty >= 10 &&
-        parsedDifficulty <= 80
-      ) {
-        difficulty = parsedDifficulty;
-      }
-    } else {
-      console.log("No difficulty param found, starting medium.");
-    }
-    console.log(`Generating puzzle with difficulty: ${difficulty}`);
+    // --- Determine Difficulty ---
+    let cellsToRemove = 48; // Default to Medium
+    const difficultySetting =
+      typeof difficultyParam === "string"
+        ? difficultyParam.toLowerCase()
+        : "medium";
 
+    console.log(`Difficulty setting received: ${difficultySetting}`);
+
+    switch (difficultySetting) {
+      case "easy":
+        cellsToRemove = 40;
+        break;
+      case "medium":
+        cellsToRemove = 50;
+        break;
+      case "hard":
+        cellsToRemove = 60;
+        break;
+      case "extreme":
+        cellsToRemove = 70; // Adjusted from potentially higher values
+        break;
+      default:
+        console.warn(
+          `Unknown difficulty setting: ${difficultySetting}, defaulting to medium.`
+        );
+        cellsToRemove = 50;
+    }
+
+    console.log(`Generating puzzle with ${cellsToRemove} cells to remove.`);
+
+    // --- Generate Board and Puzzle ---
     const solvedBoard = generateBoard();
-    const puzzleBoard = createPuzzle(solvedBoard, difficulty);
+    const puzzleBoard = createPuzzle(solvedBoard, cellsToRemove); // Use the determined cellsToRemove
 
     if (puzzleBoard) {
       setSolution(solvedBoard);
@@ -152,12 +182,16 @@ export function useSudokuGame() {
     calculateRemainingCounts,
   ]);
 
+  const toggleDraftMode = useCallback(() => {
+    setIsDraftMode((prev) => !prev);
+    console.log(`Draft mode toggled: ${!isDraftMode}`);
+  }, [isDraftMode]);
+
   const handleSelectNumber = useCallback(
     (num: number) => {
       clearError();
       const newSelectedNumber = num === selectedNumber ? null : num;
       setSelectedNumber(newSelectedNumber);
-      setIsErasing(false);
       calculateConflicts(newSelectedNumber, board);
       console.log(
         `Selected number: ${
@@ -168,82 +202,228 @@ export function useSudokuGame() {
     [selectedNumber, board, clearError, calculateConflicts]
   );
 
-  const handleSelectEraser = useCallback(() => {
-    clearError();
-    setIsErasing((prev) => !prev);
-    setSelectedNumber(null);
-    setConflicts(new Set());
-    // console.log(`Eraser mode toggled`);
-  }, [clearError]);
-
-  const handleClearBoard = useCallback(() => {
-    clearError();
-    if (initialPuzzleState && board) {
-      setBoard(initialPuzzleState.map((row) => [...row]));
-    }
-    setSelectedCell(null);
-    setSelectedNumber(null);
-    setIsErasing(false);
-    setConflicts(new Set());
-    console.log("Board cleared");
-  }, [initialPuzzleState, board, clearError]);
-
   const handleSelectCell = useCallback(
     (row: number, col: number) => {
-      if (!initialPuzzleState || !board || !solution || isGameWon || isGameOver)
-        return;
+      console.log(`--- handleSelectCell called for R${row + 1}C${col + 1} ---`);
 
-      const cellKey = `${row}-${col}`;
+      if (!initialPuzzleState || !board || isGameWon || isGameOver) {
+        console.log("handleSelectCell: Returning early (invalid state)");
+        return;
+      }
+
+      const cellKey = rows[row] + cols[col];
+      const currentCellValue = board?.[row]?.[col]; // Get current value early
       clearError();
 
-      if (initialPuzzleState[row][col] === 0) {
-        if (isErasing) {
-          const newBoard = board.map((r, rIdx) =>
-            r.map((c, cIdx) => (rIdx === row && cIdx === col ? 0 : c))
+      // 1. Is it a fixed initial cell?
+      if (initialPuzzleState?.[row]?.[col] !== 0) {
+        console.log("handleSelectCell: Tapped on fixed cell");
+        setSelectedCell(null); // Deselect if selecting a fixed cell
+        return; // Cannot modify fixed cells
+      }
+
+      // 2. Is it already correctly filled by the user (and not in draft mode)?
+      // Note: This check is now slightly redundant due to checks within modes, but harmless
+      if (currentCellValue && currentCellValue !== 0 && !isDraftMode) {
+        console.log(
+          `handleSelectCell: Cell ${cellKey} already has final value ${currentCellValue}.`
+        );
+        setSelectedCell({ row, col }); // Allow selecting it, but not modifying
+        return;
+      }
+
+      console.log(
+        `handleSelectCell: Mode - Draft=${isDraftMode}, SelectedNum=${selectedNumber}`
+      );
+
+      // --- Action Based on Mode ---
+
+      if (isDraftMode) {
+        console.log("handleSelectCell: Entering Draft Mode logic");
+
+        // 2a. Cannot place draft on cell with a final number
+        if (currentCellValue && currentCellValue !== 0) {
+          console.log(
+            `handleSelectCell: Cannot place draft on cell ${cellKey} with final value ${currentCellValue}.`
           );
-          setBoard(newBoard);
-          setSelectedCell(null);
-          calculateConflicts(selectedNumber, newBoard);
-        } else if (selectedNumber !== null) {
+          // Optionally select the cell instead of doing nothing?
+          // setSelectedCell({ row, col });
+          return;
+        }
+
+        if (selectedNumber !== null) {
+          // 2b. Cannot place draft if the number conflicts
           if (conflicts.has(cellKey)) {
-            setErrorMessage(`Cannot place ${selectedNumber} here (conflict).`);
+            console.log(
+              `handleSelectCell: Cannot place draft ${selectedNumber} in conflicting cell ${cellKey}`
+            );
+            setErrorMessage(
+              `Cannot place draft ${selectedNumber} here (conflict).`
+            );
             errorTimeoutRef.current = setTimeout(() => {
               clearError();
             }, 2000);
-            return;
+            return; // Forbid draft placement in conflicting cell
           }
-          if (selectedNumber !== solution[row][col]) {
-            setErrorMessage(`Incorrect number.`);
-            errorTimeoutRef.current = setTimeout(() => {
-              clearError();
-            }, 1500);
-            const newLives = livesRemaining - 1;
-            setLivesRemaining(newLives);
-            if (newLives <= 0) {
-              setIsGameOver(true);
-              setSelectedCell(null);
-              setSelectedNumber(null);
-              setIsErasing(false);
-              setConflicts(new Set());
+
+          // Add/remove draft mark (only if cell is empty and not conflicting)
+          setDraftMarks((prevDrafts) => {
+            const newDrafts = { ...prevDrafts };
+            const currentMarks = newDrafts[cellKey] ?? new Set<number>();
+            if (currentMarks.has(selectedNumber)) {
+              currentMarks.delete(selectedNumber);
+            } else {
+              currentMarks.add(selectedNumber);
             }
-            return;
+            if (currentMarks.size === 0) {
+              delete newDrafts[cellKey];
+            } else {
+              newDrafts[cellKey] = new Set(currentMarks);
+            }
+            console.log(
+              `   DraftMode: Updated draft marks for ${cellKey}:`,
+              newDrafts[cellKey] ? Array.from(newDrafts[cellKey]) : "deleted"
+            );
+            return newDrafts;
+          });
+          // REMOVED the logic that cleared the board cell if it had a value
+          setSelectedCell(null); // Deselect cell after modifying draft
+        } else {
+          // Selecting cell in draft mode (no number chosen yet) - allow selecting empty cells
+          if (!currentCellValue) {
+            setSelectedCell({ row, col });
           }
-          const newBoard = board.map((r, rIdx) =>
-            r.map((c, cIdx) =>
-              rIdx === row && cIdx === col ? selectedNumber : c
+        }
+      } else if (selectedNumber !== null) {
+        console.log("handleSelectCell: Entering Normal Number Entry logic");
+        // --- Normal Number Entry Logic ---
+        if (!solution) {
+          console.log("handleSelectCell: Returning early (no solution board)");
+          return;
+        }
+
+        // 3. Is this cell conflicting with the selected number?
+        if (conflicts.has(cellKey)) {
+          console.log(
+            `handleSelectCell: Cannot place ${selectedNumber} in conflicting cell ${cellKey}`
+          );
+          setErrorMessage(`Cannot place ${selectedNumber} here (conflict).`);
+          errorTimeoutRef.current = setTimeout(() => {
+            clearError();
+          }, 2000);
+          return; // Forbid placement in conflicting cell
+        }
+
+        // 4. Is the number incorrect? (Handles lives/game over)
+        if (selectedNumber !== solution[row][col]) {
+          console.log(
+            `handleSelectCell: Incorrect number ${selectedNumber} placed.`
+          );
+          setErrorMessage(`Incorrect number.`);
+          errorTimeoutRef.current = setTimeout(() => {
+            clearError();
+          }, 1500);
+          const newLives = livesRemaining - 1;
+          setLivesRemaining(newLives);
+          if (newLives <= 0) {
+            setIsGameOver(true);
+            setSelectedCell(null);
+            setSelectedNumber(null);
+            setIsDraftMode(false);
+            setConflicts(new Set());
+          }
+          return;
+        }
+
+        // --- Number is Correct and Placed ---
+        console.log(
+          `handleSelectCell: Correct number ${selectedNumber} placed. Updating board.`
+        );
+        const newBoard = board.map((r, rIdx) =>
+          r.map((cVal, cIdx) =>
+            rIdx === row && cIdx === col ? selectedNumber : cVal
+          )
+        );
+        setBoard(newBoard);
+
+        console.log("handleSelectCell: *** Starting Draft Mark Cleanup ***");
+
+        const currentSquareKey = rows[row] + cols[col];
+        const peerKeys = peers[currentSquareKey];
+        console.log(
+          `   Cleanup: Placed ${selectedNumber} at ${currentSquareKey}. Checking peers:`,
+          Array.from(peerKeys)
+        );
+
+        setDraftMarks((prevDrafts) => {
+          console.log(
+            "   Cleanup: Previous Drafts:",
+            JSON.stringify(
+              Object.fromEntries(
+                Array.from(Object.entries(prevDrafts), ([k, v]) => [
+                  k,
+                  Array.from(v),
+                ])
+              )
             )
           );
-          setBoard(newBoard);
-          calculateConflicts(selectedNumber, newBoard);
-        } else {
+          const newDrafts = { ...prevDrafts };
+          let changed = false;
+
+          if (newDrafts[currentSquareKey]) {
+            console.log(
+              `      - Removing drafts from filled cell ${currentSquareKey}`
+            );
+            delete newDrafts[currentSquareKey];
+            changed = true;
+          }
+
+          for (const peerKey of peerKeys) {
+            if (newDrafts[peerKey]?.has(selectedNumber)) {
+              console.log(
+                `      - Found draft ${selectedNumber} in peer ${peerKey}. Removing.`
+              );
+              const newPeerMarks = new Set(newDrafts[peerKey]);
+              newPeerMarks.delete(selectedNumber);
+              changed = true;
+              if (newPeerMarks.size === 0) {
+                console.log(
+                  `         - Peer ${peerKey} draft set now empty. Deleting key.`
+                );
+                delete newDrafts[peerKey];
+              } else {
+                newDrafts[peerKey] = newPeerMarks;
+              }
+            }
+          }
+          if (!changed) console.log("      - No draft mark changes needed.");
+          console.log(
+            "   Cleanup: New Drafts:",
+            JSON.stringify(
+              Object.fromEntries(
+                Array.from(Object.entries(newDrafts), ([k, v]) => [
+                  k,
+                  Array.from(v),
+                ])
+              )
+            )
+          );
+          return changed ? newDrafts : prevDrafts;
+        });
+        calculateConflicts(selectedNumber, newBoard);
+      } else {
+        console.log(
+          "handleSelectCell: Entering Cell Selection logic (no number selected)"
+        );
+        // --- Just Selecting a Cell ---
+        // Allow selecting only if the cell doesn't have a final number
+        if (!currentCellValue) {
           setSelectedCell((prev) =>
             prev?.row === row && prev?.col === col ? null : { row, col }
           );
+        } else {
+          setSelectedCell(null); // Deselect if tapping a filled cell
         }
-      } else {
-        setSelectedCell(null);
-        setSelectedNumber(null);
-        setIsErasing(false);
       }
     },
     [
@@ -252,15 +432,18 @@ export function useSudokuGame() {
       solution,
       isGameWon,
       isGameOver,
-      isErasing,
+      isDraftMode,
       selectedNumber,
       conflicts,
       livesRemaining,
+      draftMarks,
       clearError,
       calculateConflicts,
+      calculateRemainingCounts,
     ]
   );
 
+  // --- Corrected provideHint ---
   const provideHint = useCallback(() => {
     // Check if hints are available and game is active
     if (hintsRemaining <= 0 || isGameWon || isGameOver || !board || !solution) {
@@ -339,6 +522,7 @@ export function useSudokuGame() {
     calculateConflicts, // Added dependency
     clearError, // Added dependency
     setErrorMessage, // Added dependency
+    // Removed setHintsRemaining, setBoard, setSelectedCell from deps
   ]);
 
   // --- Effects ---
@@ -375,7 +559,7 @@ export function useSudokuGame() {
       setIsGameWon(true);
       setSelectedCell(null);
       setSelectedNumber(null);
-      setIsErasing(false);
+      setIsDraftMode(false);
       setConflicts(new Set());
     }
   }, [board, solution, isGameWon, isGameOver]);
@@ -389,6 +573,8 @@ export function useSudokuGame() {
   useEffect(() => {
     if (!board || isGameWon || isGameOver || autoFillingCell) return;
     let boardUpdated = false;
+
+    // Helper to find the only missing number in a unit (row, col, or block)
     const findMissingInUnit = (
       unit: CellValue[]
     ): { num: number | null; index: number } => {
@@ -398,7 +584,7 @@ export function useSudokuGame() {
       for (let i = 0; i < 9; i++) {
         const cell = unit[i];
         if (!cell) {
-          // Check for 0 or null
+          // Checks for 0 or null
           emptyCount++;
           emptyIndex = i;
         } else {
@@ -412,48 +598,80 @@ export function useSudokuGame() {
           }
         }
       }
-      return { num: null, index: -1 }; // Explicitly return for all paths
+      return { num: null, index: -1 };
     };
+
+    // Helper to trigger the auto-fill animation/update
     const triggerAutoFill = (r: number, c: number, num: number) => {
       console.log(`Highlighting auto-fill for cell (${r}, ${c}) with ${num}`);
-      clearAutoFillTimeout();
+      clearAutoFillTimeout(); // Ensure previous timeouts are cleared
       setAutoFillingCell({ r, c, num });
       autoFillTimeoutRef.current = setTimeout(() => {
         setBoard((currentBoard) => {
           if (!currentBoard) return null;
           const newBoard = currentBoard.map((row) => [...row]);
-          if (newBoard[r][c] === 0 || newBoard[r][c] === null)
+          // Double check cell is still empty before filling
+          if (newBoard[r][c] === 0 || newBoard[r][c] === null) {
             newBoard[r][c] = num;
+          }
           return newBoard;
         });
         setAutoFillingCell(null);
         autoFillTimeoutRef.current = null;
-      }, 500);
+      }, 500); // Adjust delay as needed
       boardUpdated = true;
     };
-    // ... (loop through rows, cols, blocks calling findMissingInUnit and triggerAutoFill) ...
-    // (Code omitted for brevity, assuming it's correct from previous steps)
-    // Need to include the full loops here
+
+    // --- Check Units ---
+
     // 1. Check Rows
     for (let r = 0; r < 9 && !boardUpdated; r++) {
       const rowUnit = board[r];
-      const { num, index } = findMissingInUnit(rowUnit);
-      if (num !== null && index !== -1) triggerAutoFill(r, index, num);
-    }
-    // 2. Check Columns, 3. Check Blocks (similar loops) ...
-    if (!boardUpdated) {
-      for (let c = 0; c < 9 && !boardUpdated; c++) {
-        /* ... check columns ... */
+      const { num, index: c } = findMissingInUnit(rowUnit);
+      if (num !== null && c !== -1) {
+        triggerAutoFill(r, c, num);
       }
     }
+
+    // 2. Check Columns
     if (!boardUpdated) {
-      for (let blockRow = 0; blockRow < 3 && !boardUpdated; blockRow++) {
-        for (let blockCol = 0; blockCol < 3 && !boardUpdated; blockCol++) {
-          /* ... check blocks ... */
+      for (let c = 0; c < 9 && !boardUpdated; c++) {
+        const colUnit: CellValue[] = [];
+        for (let r = 0; r < 9; r++) {
+          colUnit.push(board[r][c]);
+        }
+        const { num, index: r } = findMissingInUnit(colUnit);
+        if (num !== null && r !== -1) {
+          triggerAutoFill(r, c, num);
         }
       }
     }
-  }, [board, isGameWon, isGameOver, autoFillingCell, clearAutoFillTimeout]); // Added clearAutoFillTimeout dependency
+
+    // 3. Check 3x3 Blocks
+    if (!boardUpdated) {
+      for (let blockRow = 0; blockRow < 3 && !boardUpdated; blockRow++) {
+        for (let blockCol = 0; blockCol < 3 && !boardUpdated; blockCol++) {
+          const blockUnit: CellValue[] = [];
+          const startRow = blockRow * 3;
+          const startCol = blockCol * 3;
+          let indices: { r: number; c: number }[] = []; // Store original indices
+          for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) {
+              const r = startRow + i;
+              const c = startCol + j;
+              blockUnit.push(board[r][c]);
+              indices.push({ r, c });
+            }
+          }
+          const { num, index } = findMissingInUnit(blockUnit);
+          if (num !== null && index !== -1) {
+            const { r, c } = indices[index]; // Get original coordinates
+            triggerAutoFill(r, c, num);
+          }
+        }
+      }
+    }
+  }, [board, isGameWon, isGameOver, autoFillingCell, clearAutoFillTimeout]);
 
   // Auto-fill: Last remaining spot for number
   useEffect(() => {
@@ -518,7 +736,6 @@ export function useSudokuGame() {
     initialPuzzleState,
     selectedCell,
     selectedNumber,
-    isErasing,
     conflicts,
     errorMessage,
     isGameWon,
@@ -527,11 +744,12 @@ export function useSudokuGame() {
     remainingCounts,
     autoFillingCell,
     hintsRemaining,
+    isDraftMode,
+    draftMarks,
     startNewGame,
     handleSelectNumber,
-    handleSelectEraser,
-    handleClearBoard,
     handleSelectCell,
     provideHint,
+    toggleDraftMode,
   };
 }
