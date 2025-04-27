@@ -12,39 +12,34 @@ import {
 interface Styles {
   functionButtonContainer: StyleProp<ViewStyle>;
   functionButton: StyleProp<ViewStyle>;
-  eraserButton: StyleProp<ViewStyle>;
-  clearButton: StyleProp<ViewStyle>;
   hintButton: StyleProp<ViewStyle>;
+  draftButton: StyleProp<ViewStyle>;
+  selectedDraftButton: StyleProp<ViewStyle>;
   newGameButton: StyleProp<ViewStyle>;
-  selectedEraserButton: StyleProp<ViewStyle>;
-  eraserButtonText: StyleProp<TextStyle>;
-  selectedEraserText: StyleProp<TextStyle>;
-  clearButtonText: StyleProp<TextStyle>;
   hintButtonText: StyleProp<TextStyle>;
+  draftButtonText: StyleProp<TextStyle>;
   newGameButtonText: StyleProp<TextStyle>;
   boardDisabled: StyleProp<ViewStyle>;
 }
 
 // Define the props required by the FunctionButtons component
 interface Props {
-  isErasing: boolean;
-  handleSelectEraser: () => void;
-  handleClearBoard: () => void;
   startNewGame: () => void;
   hintsRemaining: number;
   handleProvideHint: () => void;
+  isDraftMode: boolean;
+  handleToggleDraftMode: () => void;
   isGameWon: boolean;
   isGameOver: boolean;
   styles: Styles;
 }
 
 const FunctionButtons: React.FC<Props> = ({
-  isErasing,
-  handleSelectEraser,
-  handleClearBoard,
   startNewGame,
   hintsRemaining,
   handleProvideHint,
+  isDraftMode,
+  handleToggleDraftMode,
   isGameWon,
   isGameOver,
   styles,
@@ -53,37 +48,27 @@ const FunctionButtons: React.FC<Props> = ({
   const isHintDisabled = isDisabled || hintsRemaining <= 0;
 
   return (
-    <View style={styles.functionButtonContainer}>
+    <View
+      style={[
+        styles.functionButtonContainer,
+        { justifyContent: "space-evenly" },
+      ]}
+    >
       <TouchableOpacity
         style={[
           styles.functionButton,
-          styles.eraserButton,
-          isErasing && styles.selectedEraserButton,
+          styles.draftButton,
+          isDraftMode && styles.selectedDraftButton,
           isDisabled && styles.boardDisabled,
         ]}
-        onPress={handleSelectEraser}
+        onPress={handleToggleDraftMode}
         disabled={isDisabled}
       >
         <Text
-          style={[
-            styles.eraserButtonText,
-            isErasing && styles.selectedEraserText,
-          ]}
+          style={[styles.draftButtonText, isDraftMode && { color: "#fff" }]}
         >
-          {isErasing ? "Eraser On" : "Erase"}
+          Draft
         </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[
-          styles.functionButton,
-          styles.clearButton,
-          isDisabled && styles.boardDisabled,
-        ]}
-        onPress={handleClearBoard}
-        disabled={isDisabled}
-      >
-        <Text style={styles.clearButtonText}>Clear</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
