@@ -129,40 +129,20 @@ export function useSudokuGame() {
     setDraftMarks({});
     setConflicts(new Set());
 
-    // --- Determine Difficulty ---
-    let cellsToRemove = 48; // Default to Medium
-    const difficultySetting =
-      typeof difficultyParam === "string"
-        ? difficultyParam.toLowerCase()
-        : "medium";
+    let cellsToRemove = 50; // Default difficulty (Medium)
 
-    console.log(`Difficulty setting received: ${difficultySetting}`);
-
-    switch (difficultySetting) {
-      case "easy":
-        cellsToRemove = 40;
-        break;
-      case "medium":
-        cellsToRemove = 50;
-        break;
-      case "hard":
-        cellsToRemove = 60;
-        break;
-      case "extreme":
-        cellsToRemove = 70; // Adjusted from potentially higher values
-        break;
-      default:
-        console.warn(
-          `Unknown difficulty setting: ${difficultySetting}, defaulting to medium.`
-        );
-        cellsToRemove = 50;
+    try {
+      const parsedNum = parseInt(<string>difficultyParam, 10);
+      cellsToRemove = parsedNum;
+    } catch (error) {
+      console.warn(
+        `>>> Parsed difficultyParam "${difficultyParam}" is invalid, error: ${error}, using default: ${cellsToRemove}`
+      );
     }
-
-    console.log(`Generating puzzle with ${cellsToRemove} cells to remove.`);
 
     // --- Generate Board and Puzzle ---
     const solvedBoard = generateBoard();
-    const puzzleBoard = createPuzzle(solvedBoard, cellsToRemove); // Use the determined cellsToRemove
+    const puzzleBoard = createPuzzle(solvedBoard, cellsToRemove);
 
     if (puzzleBoard) {
       setSolution(solvedBoard);
