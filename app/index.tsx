@@ -45,16 +45,16 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Choose Difficulty</Text>
       <View style={styles.buttonContainer}>
-        <Pressable style={styles.button} onPress={() => startGame(30)}>
+        <Pressable style={styles.button} onPress={() => startGame(40)}>
           <Text style={styles.buttonText}>Easy</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={() => startGame(45)}>
+        <Pressable style={styles.button} onPress={() => startGame(50)}>
           <Text style={styles.buttonText}>Medium</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={() => startGame(60)}>
           <Text style={styles.buttonText}>Hard</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={() => startGame(75)}>
+        <Pressable style={styles.button} onPress={() => startGame(70)}>
           <Text style={styles.buttonText}>Extreme</Text>
         </Pressable>
         <Pressable
