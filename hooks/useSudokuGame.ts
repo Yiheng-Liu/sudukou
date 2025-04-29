@@ -51,6 +51,7 @@ export function useSudokuGame() {
   const [draftMarks, setDraftMarks] = useState<DraftMarks>({});
   const [conflicts, setConflicts] = useState<Conflicts>(new Set());
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorCell, setErrorCell] = useState<SelectedCell>(null);
   const [isGameWon, setIsGameWon] = useState<boolean>(false);
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [livesRemaining, setLivesRemaining] = useState<number>(3);
@@ -74,7 +75,6 @@ export function useSudokuGame() {
       clearTimeout(errorTimeoutRef.current);
       errorTimeoutRef.current = null;
     }
-    setErrorMessage(null);
   }, [errorTimeoutRef]);
 
   const clearAutoFillTimeout = useCallback(() => {
@@ -361,6 +361,7 @@ export function useSudokuGame() {
       clearError();
       const newSelectedNumber = num === selectedNumber ? null : num;
       setSelectedNumber(newSelectedNumber);
+      setSelectedCell(null);
       calculateConflicts(newSelectedNumber, board);
       console.log(
         `Selected number: ${
@@ -426,13 +427,11 @@ export function useSudokuGame() {
             console.log(
               `handleSelectCell: Cannot place draft ${selectedNumber} in conflicting cell ${cellKey}`
             );
-            setErrorMessage(
-              `Cannot place draft ${selectedNumber} here (conflict).`
+            // Placement Prevented due to Conflict
+            console.log(
+              `handleSelectCell: Cannot place ${selectedNumber} in conflicting cell ${cellKey}`
             );
-            errorTimeoutRef.current = setTimeout(() => {
-              clearError();
-            }, 2000);
-            return; // Forbid draft placement in conflicting cell
+            return; // Still return to forbid placement
           }
 
           // Add/remove draft mark (only if cell is empty and not conflicting)
@@ -476,11 +475,11 @@ export function useSudokuGame() {
           console.log(
             `handleSelectCell: Cannot place ${selectedNumber} in conflicting cell ${cellKey}`
           );
-          setErrorMessage(`Cannot place ${selectedNumber} here (conflict).`);
-          errorTimeoutRef.current = setTimeout(() => {
-            clearError();
-          }, 2000);
-          return; // Forbid placement in conflicting cell
+          // Placement Prevented due to Conflict
+          console.log(
+            `handleSelectCell: Cannot place ${selectedNumber} in conflicting cell ${cellKey}`
+          );
+          return; // Still return to forbid placement
         }
 
         // 4. Is the number incorrect? (Handles lives/game over)
@@ -488,20 +487,24 @@ export function useSudokuGame() {
           console.log(
             `handleSelectCell: Incorrect number ${selectedNumber} placed.`
           );
-          setErrorMessage(`Incorrect number.`);
-          errorTimeoutRef.current = setTimeout(() => {
-            clearError();
-          }, 1500);
+          // *** Trigger Error Animation ***
+          setErrorCell({ row, col });
+          // Clear the error state after animation duration
+          setTimeout(() => setErrorCell(null), 500); // Match animation time
+
+          // *** Decrement Lives / Game Over ***
           const newLives = livesRemaining - 1;
           setLivesRemaining(newLives);
           if (newLives <= 0) {
             setIsGameOver(true);
+            // Clear selections etc. on game over
             setSelectedCell(null);
             setSelectedNumber(null);
             setIsDraftMode(false);
             setConflicts(new Set());
+            setErrorCell(null); // Ensure error state is clear on game over
           }
-          return;
+          return; // Don't proceed to place the number
         }
 
         // --- Number is Correct and Placed ---
@@ -965,5 +968,6 @@ export function useSudokuGame() {
     handleSelectCell,
     provideHint,
     toggleDraftMode,
+    errorCell,
   };
 }
