@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   isValid,
   generateBoard,
@@ -15,13 +16,29 @@ import {
   SolutionState,
   Conflicts,
 } from "../types/sudokuTypes";
+import { useUser } from "@/context/UserContext";
+import { supabase, getDifficultyKey } from "@/lib/supabaseClient";
 
 // Define DraftMarks type
 type DraftMarks = { [cellKey: string]: Set<number> };
 
+// Define SavedGameState type
+type SavedGameState = {
+  board: BoardState;
+  initialPuzzleState: BoardState;
+  solution: SolutionState;
+  livesRemaining: number;
+  hintsRemaining: number;
+  draftMarks: DraftMarks;
+  difficulty: number;
+};
+
+const SAVED_GAME_KEY = "sudokuGameState";
+
 export function useSudokuGame() {
   const params = useLocalSearchParams();
   const difficultyParam = params.difficulty;
+  const { userId, isOnline, fetchRecord: refreshUserRecord } = useUser();
 
   // --- State ---
   const [board, setBoard] = useState<BoardState>(null);
@@ -38,6 +55,7 @@ export function useSudokuGame() {
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
   const [livesRemaining, setLivesRemaining] = useState<number>(3);
   const [hintsRemaining, setHintsRemaining] = useState<number>(3);
+  const [currentDifficulty, setCurrentDifficulty] = useState<number>(50);
   const [remainingCounts, setRemainingCounts] = useState<Map<number, number>>(
     new Map()
   );
@@ -111,56 +129,227 @@ export function useSudokuGame() {
   );
 
   // --- Game Logic Handlers ---
-  const startNewGame = useCallback(() => {
-    console.log("Starting new game generation...");
-    clearError();
-    clearAutoFillTimeout();
-    setAutoFillingCell(null);
-    setIsGameWon(false);
-    setIsGameOver(false);
-    setLivesRemaining(3);
-    setHintsRemaining(3);
-    setBoard(null);
-    setInitialPuzzleState(null);
-    setSolution(null);
-    setSelectedCell(null);
-    setSelectedNumber(null);
-    setIsDraftMode(false);
-    setDraftMarks({});
-    setConflicts(new Set());
 
-    let cellsToRemove = 50; // Default difficulty (Medium)
+  // Extracted core game initialization logic
+  const initializeNewGame = useCallback(
+    (difficulty: number | string = 50) => {
+      console.log(`Initializing new game with difficulty: ${difficulty}`);
+      clearError();
+      clearAutoFillTimeout();
+      setAutoFillingCell(null);
+      setIsGameWon(false);
+      setIsGameOver(false);
+      setLivesRemaining(3);
+      setHintsRemaining(3);
+      setCurrentDifficulty(difficulty as number);
+      setBoard(null); // Clear board initially
+      setInitialPuzzleState(null);
+      setSolution(null);
+      setSelectedCell(null);
+      setSelectedNumber(null);
+      setIsDraftMode(false);
+      setDraftMarks({});
+      setConflicts(new Set());
+
+      let cellsToRemove = 50; // Default difficulty (Medium)
+      if (typeof difficulty === "string") {
+        const parsedNum = parseInt(difficulty, 10);
+        if (!isNaN(parsedNum)) {
+          cellsToRemove = parsedNum;
+        } else {
+          console.warn(
+            `Invalid difficulty string "${difficulty}", using default: ${cellsToRemove}`
+          );
+        }
+      } else if (typeof difficulty === "number") {
+        cellsToRemove = difficulty;
+      }
+
+      // Use the difficulty stored in state now
+      cellsToRemove = currentDifficulty;
+
+      // --- Generate Board and Puzzle ---
+      try {
+        const solvedBoard = generateBoard();
+        const puzzleBoard = createPuzzle(solvedBoard, cellsToRemove);
+
+        if (puzzleBoard) {
+          setSolution(solvedBoard);
+          const initialPuzzle = puzzleBoard.map((row) => [...row]);
+          const currentBoard = puzzleBoard.map((row) => [...row]);
+          setInitialPuzzleState(initialPuzzle);
+          setBoard(currentBoard);
+          calculateRemainingCounts(currentBoard);
+          console.log("New game initialized successfully");
+        } else {
+          console.error("Failed to generate a valid puzzle.");
+          setErrorMessage("Error generating puzzle. Try again.");
+          calculateRemainingCounts(null); // Calculate counts for empty board
+        }
+      } catch (error) {
+        console.error("Error during board generation:", error);
+        setErrorMessage("Critical error generating puzzle.");
+        calculateRemainingCounts(null);
+      }
+    },
+    [
+      clearError,
+      clearAutoFillTimeout,
+      calculateRemainingCounts,
+      currentDifficulty,
+    ]
+  );
+
+  // Renamed from startNewGame, calls initializeNewGame (Modified)
+  const startNewGame = useCallback(() => {
+    console.log("startNewGame button pressed - initializing new game...");
+    // Always uses the difficulty from params if available, otherwise defaults
+    // Handle potential string array from params (Added check)
+    const difficultyToUse = Array.isArray(difficultyParam)
+      ? difficultyParam[0]
+      : difficultyParam;
+    initializeNewGame(difficultyToUse ?? 50);
+  }, [difficultyParam, initializeNewGame]);
+
+  // --- Effect for Initial Load --- (Added)
+  useEffect(() => {
+    const loadGame = async () => {
+      if (difficultyParam) {
+        // If difficulty is provided, start a new game
+        console.log("Difficulty param found, starting new game.");
+        // Handle potential string array from params (Added check)
+        const difficultyToUse = Array.isArray(difficultyParam)
+          ? difficultyParam[0]
+          : difficultyParam;
+        initializeNewGame(difficultyToUse);
+      } else {
+        // No difficulty param, try to load saved game
+        console.log("No difficulty param, attempting to load saved game.");
+        try {
+          const savedStateString = await AsyncStorage.getItem(SAVED_GAME_KEY);
+          if (savedStateString) {
+            console.log("Found saved game state.");
+            const savedState: SavedGameState = JSON.parse(savedStateString);
+
+            // Need to deserialize the Set within draftMarks
+            const deserializedDraftMarks: DraftMarks = {};
+            for (const key in savedState.draftMarks) {
+              if (
+                Object.prototype.hasOwnProperty.call(savedState.draftMarks, key)
+              ) {
+                // Ensure draftMarks[key] is treated as an array before creating a Set
+                const marksArray = savedState.draftMarks[
+                  key
+                ] as unknown as number[];
+                deserializedDraftMarks[key] = new Set(marksArray || []);
+              }
+            }
+
+            // Validate loaded state (basic checks)
+            if (
+              savedState.board &&
+              savedState.initialPuzzleState &&
+              savedState.solution
+            ) {
+              setBoard(savedState.board);
+              setInitialPuzzleState(savedState.initialPuzzleState);
+              setSolution(savedState.solution);
+              setLivesRemaining(savedState.livesRemaining ?? 3);
+              setHintsRemaining(savedState.hintsRemaining ?? 3);
+              setCurrentDifficulty(savedState.difficulty ?? 50);
+              setDraftMarks(deserializedDraftMarks); // Use deserialized marks
+              calculateRemainingCounts(savedState.board);
+              // Reset other volatile states
+              setSelectedCell(null);
+              setSelectedNumber(null);
+              setIsDraftMode(false);
+              setConflicts(new Set());
+              setIsGameWon(false);
+              setIsGameOver(false);
+              setErrorMessage(null);
+              setAutoFillingCell(null);
+              console.log("Saved game loaded successfully.");
+            } else {
+              console.warn(
+                "Loaded game state is invalid. Starting new default game."
+              );
+              await AsyncStorage.removeItem(SAVED_GAME_KEY); // Clear invalid state
+              initializeNewGame(); // Start default medium game
+            }
+          } else {
+            console.log("No saved game found. Starting new default game.");
+            initializeNewGame(); // Start default medium game
+          }
+        } catch (error) {
+          console.error("Failed to load game state:", error);
+          setErrorMessage("Failed to load saved game. Starting new game.");
+          initializeNewGame(); // Start default medium game on error
+        }
+      }
+    };
+
+    loadGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [difficultyParam, initializeNewGame]); // Run only once on mount based on difficultyParam presence
+
+  // --- Save Game State ---
+  const saveGameState = useCallback(async () => {
+    if (!board || !initialPuzzleState || !solution || isGameWon || isGameOver) {
+      // Don't save if game isn't properly initialized or is finished
+      // Optionally clear saved state if game is finished
+      if (isGameWon || isGameOver) {
+        console.log("Game finished, clearing saved state.");
+        try {
+          await AsyncStorage.removeItem(SAVED_GAME_KEY);
+        } catch (error) {
+          console.error("Failed to clear saved game state:", error);
+        }
+      }
+      return;
+    }
+
+    // Serialize DraftMarks Set correctly
+    const serializableDraftMarks: { [key: string]: number[] } = {};
+    for (const key in draftMarks) {
+      if (Object.prototype.hasOwnProperty.call(draftMarks, key)) {
+        serializableDraftMarks[key] = Array.from(draftMarks[key]);
+      }
+    }
+
+    const stateToSave: SavedGameState = {
+      board,
+      initialPuzzleState,
+      solution,
+      livesRemaining,
+      hintsRemaining,
+      draftMarks: serializableDraftMarks as unknown as DraftMarks, // Store serialized version
+      difficulty: currentDifficulty,
+    };
 
     try {
-      const parsedNum = parseInt(<string>difficultyParam, 10);
-      cellsToRemove = parsedNum;
+      const jsonState = JSON.stringify(stateToSave);
+      await AsyncStorage.setItem(SAVED_GAME_KEY, jsonState);
+      console.log("Game state saved.");
     } catch (error) {
-      console.warn(
-        `>>> Parsed difficultyParam "${difficultyParam}" is invalid, error: ${error}, using default: ${cellsToRemove}`
-      );
-    }
-
-    // --- Generate Board and Puzzle ---
-    const solvedBoard = generateBoard();
-    const puzzleBoard = createPuzzle(solvedBoard, cellsToRemove);
-
-    if (puzzleBoard) {
-      setSolution(solvedBoard);
-      setInitialPuzzleState(puzzleBoard.map((row) => [...row]));
-      setBoard(puzzleBoard.map((row) => [...row]));
-      calculateRemainingCounts(puzzleBoard);
-      console.log("New game started successfully");
-    } else {
-      console.error("Failed to generate a valid puzzle.");
-      setErrorMessage("Error generating puzzle. Try again.");
-      calculateRemainingCounts(null);
+      console.error("Failed to save game state:", error);
+      // Optionally set an error message for the user
+      setErrorMessage("Failed to save game progress.");
+      errorTimeoutRef.current = setTimeout(() => {
+        clearError();
+      }, 3000);
     }
   }, [
-    difficultyParam,
+    board,
+    initialPuzzleState,
+    solution,
+    livesRemaining,
+    hintsRemaining,
+    draftMarks,
+    isGameWon,
+    isGameOver,
+    currentDifficulty,
     clearError,
-    clearAutoFillTimeout,
-    calculateRemainingCounts,
-  ]);
+  ]); // Dependencies for saving
 
   const toggleDraftMode = useCallback(() => {
     setIsDraftMode((prev) => !prev);
@@ -505,35 +694,77 @@ export function useSudokuGame() {
     // Removed setHintsRemaining, setBoard, setSelectedCell from deps
   ]);
 
+  // --- Update Record Logic --- (Defined outside useEffect)
+  const updateRecordOnWin = useCallback(async () => {
+    // Use userId, isOnline, currentDifficulty from hook's scope
+    if (!userId || !isOnline) {
+      console.warn(
+        "Game won, but cannot update record (offline or no user ID).",
+        { userId, isOnline }
+      );
+      return;
+    }
+
+    const difficultyKey = getDifficultyKey(currentDifficulty);
+    if (!difficultyKey) {
+      console.error(
+        "Game won, but invalid difficulty found:",
+        currentDifficulty
+      );
+      return;
+    }
+
+    console.log(`Attempting to increment ${difficultyKey} for user ${userId}`);
+
+    try {
+      const { error: rpcError } = await supabase.rpc("increment_difficulty", {
+        user_uuid: userId,
+        difficulty_column: difficultyKey,
+      });
+
+      if (rpcError) {
+        console.error(
+          `Error updating record via RPC for ${difficultyKey}:`,
+          rpcError
+        );
+        // Handle error: Maybe set a state variable to show an error message?
+      } else {
+        console.log(
+          `Successfully incremented ${difficultyKey} for user ${userId}`
+        );
+        // Trigger a refresh of user data in UserContext
+        // Adding refreshUserRecord to dependencies ensures it's stable
+        refreshUserRecord();
+      }
+    } catch (err) {
+      console.error("Error updating game record on win:", err);
+    }
+  }, [userId, isOnline, currentDifficulty, refreshUserRecord]); // Added dependencies
+
   // --- Effects ---
 
-  // Initial game start
+  // Effect to save game state whenever mutable state changes (Debounced?)
+  // Using useEffect for saving might be better than calling it in multiple handlers
   useEffect(() => {
-    startNewGame();
-    // Cleanup timeout on unmount
-    return () => {
-      clearError();
-      clearAutoFillTimeout();
-    };
-  }, [startNewGame]); // Rerun only if startNewGame changes (due to difficultyParam)
+    // Debounce save operation? For now, save directly.
+    saveGameState();
+  }, [board, livesRemaining, hintsRemaining, draftMarks, saveGameState]); // Save when these change
 
-  // Win Check
+  // Win Check & Update Record
   useEffect(() => {
     if (!board || !solution || isGameWon || isGameOver) return;
+
     let isComplete = true;
     for (let i = 0; i < 9; i++) {
       for (let j = 0; j < 9; j++) {
-        if (!board[i][j]) {
-          isComplete = false;
-          break;
-        }
-        if (board[i][j] !== solution[i][j]) {
+        if (!board[i][j] || board[i][j] !== solution[i][j]) {
           isComplete = false;
           break;
         }
       }
       if (!isComplete) break;
     }
+
     if (isComplete) {
       console.log("Game Won!");
       setIsGameWon(true);
@@ -541,8 +772,11 @@ export function useSudokuGame() {
       setSelectedNumber(null);
       setIsDraftMode(false);
       setConflicts(new Set());
+
+      // Call the update function
+      updateRecordOnWin();
     }
-  }, [board, solution, isGameWon, isGameOver]);
+  }, [board, solution, isGameWon, isGameOver, updateRecordOnWin]); // Added updateRecordOnWin to dependencies
 
   // Update Remaining Counts
   useEffect(() => {
