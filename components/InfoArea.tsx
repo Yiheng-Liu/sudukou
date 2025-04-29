@@ -13,6 +13,7 @@ interface InfoAreaProps {
     infoArea: StyleProp<ViewStyle>;
     infoText: StyleProp<TextStyle>;
     errorText: StyleProp<TextStyle>;
+    livesText: StyleProp<TextStyle>;
   };
 }
 
@@ -26,11 +27,20 @@ const InfoArea: React.FC<InfoAreaProps> = ({
   isGameOver,
   styles,
 }) => {
+  let statusText = "Selecting";
+  if (isErasing) {
+    statusText = "Erasing";
+  } else if (selectedNumber) {
+    statusText = `Entering ${selectedNumber}`;
+  }
+
   if (isGameWon || isGameOver) return null; // Don't show info area when game is won or over
 
   return (
     <View style={styles.infoArea}>
-      <Text style={styles.infoText}>Lives: {livesRemaining}</Text>
+      <Text style={[styles.infoText, styles.livesText]}>
+        Lives: {livesRemaining}
+      </Text>
       {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
       <Text style={styles.infoText}>
         Selected:{" "}
@@ -38,14 +48,7 @@ const InfoArea: React.FC<InfoAreaProps> = ({
           ? `R${selectedCell.row + 1}C${selectedCell.col + 1}`
           : "None"}
       </Text>
-      <Text style={styles.infoText}>
-        Mode:{" "}
-        {isErasing
-          ? "Erasing"
-          : selectedNumber
-          ? `Entering ${selectedNumber}`
-          : "Selecting"}
-      </Text>
+      <Text style={styles.infoText}>Mode: {statusText}</Text>
     </View>
   );
 };

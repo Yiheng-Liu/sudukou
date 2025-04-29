@@ -65,7 +65,7 @@ export default function WelcomeScreen() {
     <View style={styles.container}>
       <View style={styles.headerContainer}>
         {isUserLoading ? (
-          <ActivityIndicator size="small" color="#007bff" />
+          <ActivityIndicator size="small" color={styles.usernameText.color} />
         ) : username ? (
           <Link href={"/profile" as any} style={styles.usernameLink}>
             <Text style={styles.usernameText}>{username}</Text>
@@ -75,7 +75,8 @@ export default function WelcomeScreen() {
         )}
       </View>
 
-      <Text style={styles.title}>Choose Difficulty</Text>
+      <Text style={styles.title}>Sudoku</Text>
+      <Text style={styles.subtitle}>Choose Difficulty</Text>
 
       {userError &&
         userError !== "Network offline. Progress may not be saved." && (
@@ -83,26 +84,68 @@ export default function WelcomeScreen() {
         )}
 
       {isLoading ? (
-        <ActivityIndicator size="large" color="#007bff" />
+        <ActivityIndicator
+          style={styles.loadingIndicator}
+          size="large"
+          color="#4A90E2"
+        />
       ) : (
         <View style={styles.buttonContainer}>
-          <Pressable style={styles.button} onPress={() => startGame(40)}>
-            <Text style={styles.buttonText}>Easy</Text>
-          </Pressable>
-          <Pressable style={styles.button} onPress={() => startGame(50)}>
-            <Text style={styles.buttonText}>Medium</Text>
-          </Pressable>
-          <Pressable style={styles.button} onPress={() => startGame(60)}>
-            <Text style={styles.buttonText}>Hard</Text>
-          </Pressable>
-          <Pressable style={styles.button} onPress={() => startGame(70)}>
-            <Text style={styles.buttonText}>Extreme</Text>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.difficultyButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => startGame(40)}
+          >
+            <Text style={[styles.buttonText, styles.difficultyButtonText]}>
+              Easy
+            </Text>
           </Pressable>
           <Pressable
-            style={[
+            style={({ pressed }) => [
+              styles.button,
+              styles.difficultyButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => startGame(50)}
+          >
+            <Text style={[styles.buttonText, styles.difficultyButtonText]}>
+              Medium
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.difficultyButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => startGame(60)}
+          >
+            <Text style={[styles.buttonText, styles.difficultyButtonText]}>
+              Hard
+            </Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              styles.button,
+              styles.difficultyButton,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={() => startGame(70)}
+          >
+            <Text style={[styles.buttonText, styles.difficultyButtonText]}>
+              Extreme
+            </Text>
+          </Pressable>
+          <View style={styles.spacer} />
+          <Pressable
+            style={({ pressed }) => [
               styles.button,
               styles.continueButton,
-              !hasSavedGame || !isOnline ? styles.buttonDisabled : {},
+              (!hasSavedGame || !isOnline) && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
             ]}
             onPress={continueGame}
             disabled={!hasSavedGame || !isOnline}
@@ -111,12 +154,12 @@ export default function WelcomeScreen() {
               Continue Game
             </Text>
           </Pressable>
-
           <Pressable
-            style={[
+            style={({ pressed }) => [
               styles.button,
               styles.leaderboardButton,
               !isOnline ? styles.buttonDisabled : {},
+              pressed && styles.buttonPressed,
             ]}
             disabled={!isOnline}
             onPress={() => router.push("/leaderboard")}
@@ -135,81 +178,102 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    padding: 20,
-    paddingTop: 80,
-    backgroundColor: "#f0f0f0",
+    paddingHorizontal: 20,
+    paddingTop: 100,
+    paddingBottom: 40,
+    backgroundColor: "#F8F9FA",
   },
   headerContainer: {
     position: "absolute",
     top: 60,
-    right: 20,
+    right: 25,
     zIndex: 10,
   },
   usernameLink: {
-    // Add padding if the hit area is too small
-    // padding: 5,
+    padding: 5,
   },
   usernameText: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#007bff",
+    fontWeight: "600",
+    color: "#4A90E2",
   },
   title: {
-    fontSize: 32,
+    fontSize: 42,
     fontWeight: "bold",
-    marginBottom: 30,
-    color: "#333",
+    color: "#343A40",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 20,
+    color: "#6C757D",
+    marginBottom: 40,
     textAlign: "center",
   },
   errorText: {
-    color: "red",
-    marginBottom: 15,
+    color: "#DC3545",
+    marginBottom: 20,
     textAlign: "center",
     fontSize: 14,
+    fontWeight: "500",
+  },
+  loadingIndicator: {
+    marginTop: 50,
   },
   buttonContainer: {
-    width: "80%",
+    width: "90%",
+    maxWidth: 400,
     alignItems: "stretch",
   },
   button: {
-    backgroundColor: "#fff",
-    paddingVertical: 15,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    borderRadius: 10,
+    borderRadius: 12,
     marginBottom: 15,
     alignItems: "center",
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "transparent",
+    elevation: 3,
+  },
+  difficultyButton: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DEE2E6",
+  },
+  continueButton: {
+    backgroundColor: "#6C757D",
+    borderColor: "#5A6268",
+  },
+  leaderboardButton: {
+    backgroundColor: "#4A90E2",
+    borderColor: "#357ABD",
   },
   buttonText: {
     fontSize: 18,
-    fontWeight: "500",
-    color: "#007bff",
+    fontWeight: "600",
+    textAlign: "center",
   },
-  continueButton: {
-    marginTop: 15,
-    backgroundColor: "#6c757d",
-    borderColor: "#5a6268",
+  difficultyButtonText: {
+    color: "#4A90E2",
   },
   continueButtonText: {
-    color: "#fff",
-  },
-  leaderboardButton: {
-    backgroundColor: "#17a2b8",
-    borderColor: "#117a8b",
+    color: "#FFFFFF",
   },
   leaderboardButtonText: {
-    color: "#fff",
+    color: "#FFFFFF",
+  },
+  buttonPressed: {
+    opacity: 0.8,
+    transform: [{ scale: 0.98 }],
   },
   buttonDisabled: {
-    backgroundColor: "#adb5bd",
-    borderColor: "#9a9fa3",
+    backgroundColor: "#CED4DA",
+    borderColor: "#ADB5BD",
     opacity: 0.7,
+    shadowOpacity: 0.05,
+    elevation: 1,
+  },
+  spacer: {
+    height: 20,
   },
 });

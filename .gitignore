@@ -9,7 +9,11 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native generated folders (if using Prebuild)
+/android
+/ios
+
+# Native credentials/certificates
 *.orig.*
 *.jks
 *.p8

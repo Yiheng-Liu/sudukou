@@ -11,8 +11,15 @@ import NetInfo from "@react-native-community/netinfo";
 import { supabase, GameRecord } from "../lib/supabaseClient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import * as Crypto from "expo-crypto";
+import { v5 as uuidv5 } from "uuid";
 
 const USER_ID_KEY = "sudokuUserId";
+const UUID_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+
+// Helper function to check if a string looks like a UUID
+const isValidUuid = (id: string | null): id is string =>
+  !!id && id.length === 36 && id.includes("-");
 
 interface UserContextType {
   userId: string | null;
@@ -66,22 +73,21 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
     let deviceId = userId;
 
     try {
-      // 1. Get or Generate User ID
+      // 1. Get or Generate User ID (UUID format)
       if (!deviceId) {
         console.log(
           "[fetchRecord] Current userId state is null. Checking Storage..."
         );
-        let storedId = null;
+        let storedUuid = null;
         try {
-          // Use localStorage for web, AsyncStorage for native
           if (Platform.OS === "web") {
-            storedId = localStorage.getItem(USER_ID_KEY);
+            storedUuid = localStorage.getItem(USER_ID_KEY);
           } else {
-            storedId = await AsyncStorage.getItem(USER_ID_KEY);
+            storedUuid = await AsyncStorage.getItem(USER_ID_KEY);
           }
           console.log(
             `[fetchRecord] Value from Storage for ${USER_ID_KEY}:`,
-            storedId
+            storedUuid
           );
         } catch (storageError) {
           console.error(
@@ -91,102 +97,132 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
           setError("Failed to read user identity from storage.");
         }
 
-        // Check if stored ID is invalid ('unknown') - should be less likely now
-        if (storedId === "unknown") {
+        // Validate stored value using the helper function defined outside
+        if (storedUuid && !isValidUuid(storedUuid)) {
           console.warn(
-            "Found invalid 'unknown' user ID in storage. Will generate a new one."
+            `[fetchRecord] Found invalid stored ID: ${storedUuid}. Will generate a new one.`
           );
-          storedId = null; // Treat as no ID found
-          // Remove the bad value
-          if (Platform.OS === "web") {
-            localStorage.removeItem(USER_ID_KEY);
-          } else {
-            await AsyncStorage.removeItem(USER_ID_KEY);
+          storedUuid = null;
+          try {
+            // Remove invalid stored ID
+            if (Platform.OS === "web") localStorage.removeItem(USER_ID_KEY);
+            else await AsyncStorage.removeItem(USER_ID_KEY);
+          } catch (removeError) {
+            console.error(
+              "[fetchRecord] Failed to remove invalid stored ID:",
+              removeError
+            );
           }
         }
 
-        if (storedId) {
-          deviceId = storedId;
-          console.log("[fetchRecord] Using stored User ID:", deviceId);
+        if (storedUuid) {
+          deviceId = storedUuid;
+          console.log(
+            "[fetchRecord] Using stored valid User ID (UUID):",
+            deviceId
+          );
         } else {
           console.log(
-            "[fetchRecord] No valid stored ID found. Generating new one..."
+            "[fetchRecord] No valid stored UUID found. Generating new one..."
           );
-          // Platform specific ID generation
-          if (Platform.OS === "web") {
-            if (typeof crypto !== "undefined" && crypto.randomUUID) {
-              deviceId = crypto.randomUUID();
-              console.log(
-                "[fetchRecord] Generated new UUID for web:",
-                deviceId
-              );
-            } else {
-              deviceId = `web-user-${Date.now()}-${Math.random()
-                .toString(36)
-                .substring(2, 15)}`;
-              console.warn(
-                "[fetchRecord] crypto.randomUUID not available, using fallback ID:",
-                deviceId
-              );
-            }
-            // Store using localStorage
+          let generatedUuid = null;
+
+          // Platform specific generation
+          if (Platform.OS === "android") {
             try {
-              localStorage.setItem(USER_ID_KEY, deviceId);
-              console.log("[fetchRecord] Stored new web ID in localStorage.");
-            } catch (storageError) {
-              console.error(
-                "[fetchRecord] Error writing to localStorage:",
-                storageError
+              const androidId = await DeviceInfo.getUniqueId();
+              console.log("[fetchRecord] Retrieved Android ID:", androidId);
+              if (!androidId || androidId === "unknown") {
+                throw new Error("Failed to get a valid Android ID.");
+              }
+              // Create a deterministic UUID v5 from the Android ID
+              generatedUuid = uuidv5(androidId, UUID_NAMESPACE);
+              console.log(
+                "[fetchRecord] Generated UUID from Android ID:",
+                generatedUuid
               );
-              setError("Failed to save user identity.");
-              // Avoid proceeding without a savable ID?
+            } catch (androidError: any) {
+              console.error(
+                "[fetchRecord] Error getting/hashing Android ID:",
+                androidError
+              );
+              setError(
+                `Failed to generate identity from Android ID: ${androidError.message}`
+              );
+              // Fallback: Generate random UUID for this session if Android ID fails
+              generatedUuid = Crypto.randomUUID
+                ? Crypto.randomUUID()
+                : `fallback-${Date.now()}`;
+              console.warn(
+                "[fetchRecord] Falling back to random UUID for Android."
+              );
             }
           } else {
-            // Native ID generation and storage
+            // iOS or Web
             try {
-              deviceId = await DeviceInfo.getUniqueId();
-              console.log(
-                "[fetchRecord] Retrieved new native Device ID:",
-                deviceId
-              );
-              if (deviceId && deviceId !== "unknown") {
-                await AsyncStorage.setItem(USER_ID_KEY, deviceId);
+              if (typeof Crypto !== "undefined" && Crypto.randomUUID) {
+                generatedUuid = Crypto.randomUUID();
                 console.log(
-                  "[fetchRecord] Stored new native ID in AsyncStorage."
+                  "[fetchRecord] Generated random UUID for iOS/Web:",
+                  generatedUuid
                 );
               } else {
-                // Handle cases where native ID is still unknown (should be rare)
-                throw new Error(
-                  "Native DeviceInfo.getUniqueId() returned invalid ID."
-                );
+                throw new Error("Crypto.randomUUID is not available.");
               }
-            } catch (nativeIdError) {
+            } catch (randomUuidError: any) {
               console.error(
-                "[fetchRecord] Error getting/storing native ID:",
-                nativeIdError
+                "[fetchRecord] Error generating random UUID:",
+                randomUuidError
               );
-              setError("Failed to get or save native device identity.");
-              // Decide on fallback - maybe generate a UUID like web?
-              deviceId = null; // Prevent using potentially bad ID
+              setError(
+                `Failed to generate user identity: ${randomUuidError.message}`
+              );
+              generatedUuid = null;
             }
           }
+
+          // Store the newly generated valid UUID
+          if (generatedUuid) {
+            try {
+              if (Platform.OS === "web") {
+                localStorage.setItem(USER_ID_KEY, generatedUuid);
+              } else {
+                await AsyncStorage.setItem(USER_ID_KEY, generatedUuid);
+              }
+              deviceId = generatedUuid;
+              console.log("[fetchRecord] Stored new UUID in Storage.");
+            } catch (storageError: any) {
+              console.error(
+                "[fetchRecord] Error storing new UUID:",
+                storageError
+              );
+              setError(`Failed to save user identity: ${storageError.message}`);
+              deviceId = null; // Don't proceed if storage failed
+            }
+          } else {
+            // Failed to generate any usable UUID
+            deviceId = null;
+          }
         }
-        // Ensure we actually got an ID before setting state
-        if (deviceId) {
+
+        // Set state only if we have a valid UUID
+        if (deviceId && isValidUuid(deviceId)) {
           setUserId(deviceId);
           console.log("[fetchRecord] Set userId state to:", deviceId);
         } else {
           console.error(
-            "[fetchRecord] Failed to obtain or generate a valid deviceId."
+            "[fetchRecord] Failed to obtain or generate a valid UUID."
           );
-          // Maybe set an error state here? Already set in catch blocks.
+          // Set error only if not already set
+          if (!error) setError("Could not establish valid user identity.");
+          deviceId = null; // Ensure it's null if invalid
         }
       }
 
-      // Ensure deviceId is valid before proceeding
-      if (!deviceId || deviceId === "unknown") {
-        console.error("Failed to obtain a valid user ID.", { deviceId });
-        setError("Could not identify user. Please try again.");
+      // Ensure deviceId is a valid UUID before Supabase query
+      if (!deviceId || !isValidUuid(deviceId)) {
+        console.error("Invalid UUID before Supabase query.", { deviceId });
+        // Error should be set already
         setIsLoading(false);
         return;
       }
@@ -311,7 +347,7 @@ export const UserProvider: React.FC<{ children: ReactNode }> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [userId, isOnline, error]); // Added isOnline and error as dependencies
+  }, [userId, isOnline, error]); // Dependencies
 
   useEffect(() => {
     fetchRecord();

@@ -7,19 +7,23 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
+// Consider importing an icon library like @expo/vector-icons if you add icons
 
 // Define the styles required by the FunctionButtons component
 interface Styles {
   functionButtonContainer: StyleProp<ViewStyle>;
   functionButton: StyleProp<ViewStyle>;
-  hintButton: StyleProp<ViewStyle>;
-  draftButton: StyleProp<ViewStyle>;
-  selectedDraftButton: StyleProp<ViewStyle>;
-  newGameButton: StyleProp<ViewStyle>;
-  hintButtonText: StyleProp<TextStyle>;
-  draftButtonText: StyleProp<TextStyle>;
-  newGameButtonText: StyleProp<TextStyle>;
-  boardDisabled: StyleProp<ViewStyle>;
+  // Specific button type styles (can be merged with base functionButton)
+  hintButton?: StyleProp<ViewStyle>;
+  draftButton?: StyleProp<ViewStyle>;
+  selectedDraftButton?: StyleProp<ViewStyle>; // Keep for draft mode indication
+  newGameButton?: StyleProp<ViewStyle>;
+  // Generic text style
+  functionButtonText: StyleProp<TextStyle>;
+  // Style for potential icons
+  iconStyle?: StyleProp<TextStyle>;
+  // Style for disabled state (can be applied conditionally)
+  boardDisabled?: StyleProp<ViewStyle>;
 }
 
 // Define the props required by the FunctionButtons component
@@ -48,46 +52,53 @@ const FunctionButtons: React.FC<Props> = ({
   const isHintDisabled = isDisabled || hintsRemaining <= 0;
 
   return (
-    <View
-      style={[
-        styles.functionButtonContainer,
-        { justifyContent: "space-evenly" },
-      ]}
-    >
+    <View style={styles.functionButtonContainer}>
+      {/* Draft Button */}
       <TouchableOpacity
         style={[
           styles.functionButton,
-          styles.draftButton,
+          styles.draftButton, // Apply specific style if provided
           isDraftMode && styles.selectedDraftButton,
-          isDisabled && styles.boardDisabled,
+          isDisabled && styles.boardDisabled, // Apply disabled style
         ]}
         onPress={handleToggleDraftMode}
         disabled={isDisabled}
+        activeOpacity={0.7}
       >
-        <Text
-          style={[styles.draftButtonText, isDraftMode && { color: "#fff" }]}
-        >
-          Draft
-        </Text>
+        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
+        {/* <Icon name="pencil" style={styles.iconStyle} /> */}
+        <Text style={[styles.functionButtonText]}>Draft</Text>
       </TouchableOpacity>
 
+      {/* Hint Button */}
       <TouchableOpacity
         style={[
           styles.functionButton,
-          styles.hintButton,
-          isHintDisabled && styles.boardDisabled,
+          styles.hintButton, // Apply specific style if provided
+          isHintDisabled && styles.boardDisabled, // Apply disabled style
         ]}
         onPress={handleProvideHint}
         disabled={isHintDisabled}
+        activeOpacity={0.7}
       >
-        <Text style={styles.hintButtonText}>Hint ({hintsRemaining})</Text>
+        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
+        {/* <Icon name="lightbulb-on-outline" style={styles.iconStyle} /> */}
+        <Text style={styles.functionButtonText}>Hint ({hintsRemaining})</Text>
       </TouchableOpacity>
 
+      {/* New Game Button */}
       <TouchableOpacity
-        style={[styles.functionButton, styles.newGameButton]}
+        style={[
+          styles.functionButton,
+          styles.newGameButton, // Apply specific style if provided
+          // Note: New Game is never disabled in current logic
+        ]}
         onPress={startNewGame}
+        activeOpacity={0.7}
       >
-        <Text style={styles.newGameButtonText}>New Game</Text>
+        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
+        {/* <Icon name="refresh" style={styles.iconStyle} /> */}
+        <Text style={styles.functionButtonText}>New Game</Text>
       </TouchableOpacity>
     </View>
   );

@@ -29,12 +29,21 @@ import InfoArea from "../components/InfoArea";
 
 const { width, height } = Dimensions.get("window"); // Get height too
 // Make board size responsive and capped
-const boardMaxWidth = 500; // Max width for the board in pixels
-const boardSize = Math.min(width * 0.9, height * 0.6, boardMaxWidth);
-const cellSize = boardSize / 9;
-const innerBorderWidth = 1;
-const outerBorderWidth = 2;
+const boardMaxWidth = 450;
+const availableWidth = width * 0.95;
+const availableHeight = height * 0.55;
+
+// Calculate ideal cell size based on smallest dimension, then floor it
+let idealBoardSize = Math.min(availableWidth, availableHeight, boardMaxWidth);
+let calculatedCellSize = Math.floor(idealBoardSize / 9);
+
+// Recalculate boardSize to be a precise multiple of the floored cell size
+const boardSize = calculatedCellSize * 9;
+const cellSize = calculatedCellSize; // Use the floored value
+
 const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+const PRIMARY_COLOR = "#4A90E2"; // Define primary color
+const ERROR_COLOR = "#DC3545"; // Define error color
 
 export default function SudokuScreen() {
   const params = useLocalSearchParams(); // Get route params
@@ -59,6 +68,7 @@ export default function SudokuScreen() {
     startNewGame,
     handleSelectNumber,
     handleSelectCell,
+    errorCell,
     provideHint,
     toggleDraftMode,
   } = useSudokuGame();
@@ -78,7 +88,7 @@ export default function SudokuScreen() {
   // Removed rendering functions (renderGrid, renderFunctionButtons, renderNumberPad)
 
   return (
-    <View style={styles.outerContainer}>
+    <View style={styles.screenContainer}>
       {/* Game Win/Over Modals */}
       <GameModals
         isGameWon={isGameWon}
@@ -89,15 +99,13 @@ export default function SudokuScreen() {
           modalContent: styles.modalView,
           modalText: styles.modalText,
           modalButton: styles.modalButton,
-          modalButtonText: styles.newGameButtonText,
+          modalButtonText: styles.modalButtonText,
           modalButtonOuterContainer: styles.modalButtonContainer,
         }}
       />
 
-      {/* Centered Content Area */}
+      {/* Main Content Area */}
       <View style={styles.contentContainer}>
-        <Text style={styles.title}>Sudoku</Text>
-
         {/* Info Area (Lives, Error, Status) */}
         <InfoArea
           livesRemaining={livesRemaining}
@@ -108,9 +116,10 @@ export default function SudokuScreen() {
           isGameWon={isGameWon}
           isGameOver={isGameOver}
           styles={{
-            infoArea: styles.infoContainer, // Renamed from infoContainer
-            infoText: styles.infoText, // New style needed
+            infoArea: styles.infoArea,
+            infoText: styles.infoText,
             errorText: styles.errorText,
+            livesText: styles.livesText,
           }}
         />
 
@@ -119,6 +128,7 @@ export default function SudokuScreen() {
           board={board}
           initialPuzzleState={initialPuzzleState}
           selectedCell={selectedCell}
+          errorCell={errorCell}
           conflicts={conflicts}
           autoFillingCell={autoFillingCell}
           draftMarks={draftMarks}
@@ -133,8 +143,6 @@ export default function SudokuScreen() {
             selectedCell: styles.selectedCell,
             conflictCell: styles.conflictCell,
             autoFillingHighlight: styles.autoFillingHighlight,
-            rightThickBorder: styles.rightThickBorder,
-            bottomThickBorder: styles.bottomThickBorder,
             cellText: styles.cellText,
             draftContainer: styles.draftContainer,
             draftText: styles.draftText,
@@ -145,7 +153,7 @@ export default function SudokuScreen() {
           }}
         />
 
-        {/* Function Buttons (Erase, Clear, New) */}
+        {/* Function Buttons (Hint, Draft, New) */}
         <FunctionButtons
           startNewGame={startNewGame}
           hintsRemaining={hintsRemaining}
@@ -161,33 +169,28 @@ export default function SudokuScreen() {
             draftButton: styles.draftButton,
             selectedDraftButton: styles.selectedDraftButton,
             newGameButton: styles.newGameButton,
-            hintButtonText: styles.hintButtonText,
-            draftButtonText: styles.draftButtonText,
-            newGameButtonText: styles.newGameButtonText,
+            functionButtonText: styles.functionButtonText,
+            iconStyle: styles.iconStyle,
             boardDisabled: styles.boardDisabled,
           }}
         />
 
         {/* Number Pad */}
         <NumberPad
-          numbers={numbers} // Pass numbers array
-          remainingCounts={remainingCountsObject} // Pass the converted object
+          numbers={numbers}
+          remainingCounts={remainingCountsObject}
           selectedNumber={selectedNumber}
           handleSelectNumber={handleSelectNumber}
           isGameWon={isGameWon}
           isGameOver={isGameOver}
-          cellSize={cellSize} // Pass cellSize for dynamic sizing
+          cellSize={cellSize}
           styles={{
             numberPadContainer: styles.numberPadContainer,
             numberCard: styles.numberCard,
             selectedNumberCard: styles.selectedNumberCard,
-            numberTextContainer: styles.numberTextContainer, // Added
-            numberStackText: styles.numberStackText, // Added
-            selectedNumberStackText: styles.selectedNumberStackText, // Added
-            numberStackCardContainer: styles.numberStackCardContainer, // Added
-            stackCard: styles.stackCard, // Added
+            disabledNumberCard: styles.disabledNumberCard,
+            numberText: styles.numberText,
             countText: styles.countText,
-            numberPadPlaceholder: styles.numberPadPlaceholder,
           }}
         />
       </View>
@@ -196,267 +199,196 @@ export default function SudokuScreen() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: {
+  screenContainer: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "space-around",
     paddingVertical: 20,
     paddingHorizontal: 10,
-    backgroundColor: "#f0f0f0", // Light background for the whole screen
+    backgroundColor: "#F8F9FA",
   },
   contentContainer: {
     width: "100%",
-    maxWidth: boardMaxWidth + 20,
+    maxWidth: boardMaxWidth + 40,
     alignItems: "center",
-    padding: 10, // Add padding inside content
-    backgroundColor: "#ffffff", // White background for the game area
-    borderRadius: 10, // Rounded corners for the content area
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    padding: 10,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 15, // Reduced margin
-    color: "#333",
-  },
-  // --- Info Area Styles (Moved from infoContainer) ---
-  infoContainer: {
-    flexDirection: "row", // Align items horizontally
-    justifyContent: "space-between", // Space out items
+  infoArea: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    width: boardSize, // Match board width
+    width: boardSize,
     maxWidth: "100%",
-    minHeight: 30, // Reduced height
-    marginBottom: 10, // Space below info
-    paddingHorizontal: 5,
+    minHeight: 35,
+    marginBottom: 15,
+    paddingHorizontal: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#E0E0E0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   infoText: {
-    fontSize: 14, // Adjusted size
-    color: "#555",
-    flexShrink: 1, // Allow text to shrink if needed
-    textAlign: "center", // Center text within its space
-    marginHorizontal: 5, // Add horizontal margin
+    fontSize: 14,
+    color: "#6C757D",
+    fontWeight: "500",
   },
   livesText: {
     fontSize: 14,
-    color: "#17a2b8",
+    color: PRIMARY_COLOR,
     fontWeight: "bold",
   },
   errorText: {
     fontSize: 14,
-    color: "#dc3545",
+    color: ERROR_COLOR,
     fontWeight: "bold",
-    flexShrink: 1,
     textAlign: "center",
-    marginHorizontal: 5,
+    flexShrink: 1,
+    marginHorizontal: 10,
   },
-  // --- SudokuGrid Styles ---
   board: {
     width: boardSize,
     height: boardSize,
-    borderWidth: outerBorderWidth,
-    borderColor: "#333",
-    flexDirection: "column",
-    marginBottom: 15,
-    backgroundColor: "#fff", // Ensure board bg is white
+    backgroundColor: "#FFFFFF",
+    borderWidth: 2,
+    borderColor: "#343A40",
+    borderRadius: 4,
+    marginBottom: 20,
+    overflow: "hidden",
   },
   boardDisabled: {
     opacity: 0.6,
   },
   row: {
     flexDirection: "row",
-    flex: 1,
   },
   cell: {
     width: cellSize,
     height: cellSize,
-    borderWidth: innerBorderWidth,
-    borderColor: "#ccc",
+    borderWidth: 0.5,
+    borderColor: "#E0E0E0",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "transparent",
   },
   selectedCell: {
-    backgroundColor: "#cce5ff",
+    backgroundColor: "#D6EAF8",
   },
   conflictCell: {
-    backgroundColor: "#f8d7da",
+    backgroundColor: "#FADBD8",
   },
   autoFillingHighlight: {
-    backgroundColor: "#fff3cd",
-    borderColor: "#ffeeba",
-    borderWidth: 2,
-  },
-  rightThickBorder: {
-    borderRightWidth: outerBorderWidth,
-    borderRightColor: "#333",
-  },
-  bottomThickBorder: {
-    borderBottomWidth: outerBorderWidth,
-    borderBottomColor: "#333",
+    backgroundColor: "#FEF9E7",
   },
   cellText: {
-    fontSize: cellSize * 0.5,
-  },
-  autoFillNumber: {
-    fontSize: cellSize * 0.5,
+    fontSize: Math.min(cellSize * 0.5, 24),
     fontWeight: "bold",
-    color: "#856404",
   },
   fixedText: {
-    color: "#333",
-    fontWeight: "bold",
+    color: "#343A40",
   },
   userNumberText: {
-    color: "#007bff",
+    color: PRIMARY_COLOR,
   },
   loadingText: {
-    fontSize: 18,
-    marginTop: 20,
-    color: "#6c757d",
+    fontSize: 16,
+    color: "#6C757D",
   },
-  // --- FunctionButtons Styles ---
   functionButtonContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
-    width: boardSize,
-    maxWidth: "100%",
-    marginVertical: 15,
+    width: boardSize * 0.8,
+    maxWidth: "90%",
+    marginBottom: 20,
+    marginTop: 10,
   },
   functionButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    padding: 10,
     borderRadius: 8,
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: "#CED4DA",
     alignItems: "center",
     justifyContent: "center",
     minWidth: 60,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  functionButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: PRIMARY_COLOR,
+    marginTop: 4,
   },
   hintButton: {
-    backgroundColor: "#6c757d",
-    borderColor: "#5a6268",
-  },
-  hintButtonText: {
-    fontSize: cellSize * 0.35,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  newGameButton: {
-    backgroundColor: "#17a2b8",
-    borderColor: "#117a8b",
-  },
-  newGameButtonText: {
-    fontSize: cellSize * 0.35,
-    fontWeight: "bold",
-    color: "#fff",
+    // Specific overrides if needed
   },
   draftButton: {
-    // Style for the draft button
-    backgroundColor: "#f8f9fa", // Similar to old eraser
-    borderColor: "#ced4da",
-    // Inherits padding/borderWidth etc from functionButton
+    // Specific overrides if needed
   },
   selectedDraftButton: {
-    // Style when draft mode is active
-    backgroundColor: "#a2d2ff", // Lighter, distinct blue
-    borderColor: "#74b9ff", // Slightly darker blue border
-    borderWidth: 1.5, // Make border slightly thicker when active
-    elevation: 4, // Increase elevation slightly
+    backgroundColor: "#D6EAF8",
+    borderColor: PRIMARY_COLOR,
   },
-  draftButtonText: {
-    // Text style for draft button
-    fontSize: cellSize * 0.35,
-    fontWeight: "bold",
-    color: "#075985", // Use a color that works on light/blue bg
+  newGameButton: {
+    // Specific overrides if needed
   },
-  // --- NumberPad Styles ---
+  iconStyle: {
+    color: PRIMARY_COLOR,
+    fontSize: 20,
+  },
   numberPadContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     alignItems: "center",
-    paddingVertical: 10,
-    width: boardSize,
-    maxWidth: "100%",
+    maxWidth: boardSize * 0.9,
   },
   numberCard: {
-    width: cellSize * 1.15,
-    height: cellSize * 1.15,
-    margin: 5,
-    borderRadius: 10,
-    backgroundColor: "#e9ecef",
+    width: (boardSize * 0.9 - 20) / 5 - 8,
+    aspectRatio: 1,
+    margin: 4,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CED4DA",
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
-    elevation: 3,
+    elevation: 2,
   },
   selectedNumberCard: {
-    backgroundColor: "#d1e7ff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 5,
+    backgroundColor: PRIMARY_COLOR,
+    borderColor: PRIMARY_COLOR,
   },
-  // Styles for the stack effect (needed by NumberPad)
-  numberStackCardContainer: {
-    position: "absolute", // Needed to stack
-    width: "100%", // Take up parent (TouchableOpacity) space
-    height: "100%",
-    alignItems: "center",
-    justifyContent: "center",
+  disabledNumberCard: {
+    backgroundColor: "#E9ECEF",
+    opacity: 0.6,
   },
-  stackCard: {
-    position: "absolute",
-    borderRadius: 6,
-    // borderWidth: 1, // Remove border
-    // Use semi-transparent background based on selection state
-    // Background color/border color set dynamically, but we remove fixed border here
-  },
-  numberTextContainer: {
-    position: "absolute",
-    alignItems: "center",
-    justifyContent: "center",
-    // backgroundColor: "#fff", // Remove background
-    borderRadius: 6,
-    // borderWidth: 1, // Remove border
-    // borderColor: "#adb5bd", // Remove border
-    // elevation: 1, // Remove elevation, rely on main card's
-    // Width, height, bottom, right set dynamically in NumberPad
-  },
-  numberStackText: {
-    fontSize: cellSize * 0.6,
+  numberText: {
+    fontSize: Math.min(cellSize * 0.5, 20),
     fontWeight: "bold",
-    color: "#495057",
-  },
-  selectedNumberStackText: {
-    color: "#0056b3", // Darker blue for selected number
+    color: PRIMARY_COLOR,
   },
   countText: {
     position: "absolute",
-    top: 4,
-    right: 6,
-    fontSize: cellSize * 0.25,
-    fontWeight: "bold",
-    color: "#6c757d",
-    zIndex: 10, // Ensure count is above text container
+    bottom: 2,
+    right: 4,
+    fontSize: 10,
+    fontWeight: "600",
+    color: "#6C757D",
   },
-  numberPadPlaceholder: {
-    width: cellSize * 1.15,
-    height: cellSize * 1.15,
-    margin: 5,
-  },
-  // --- GameModals Styles ---
   modalContainer: {
     flex: 1,
     justifyContent: "center",
@@ -470,10 +402,7 @@ const styles = StyleSheet.create({
     padding: 35,
     alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
@@ -481,27 +410,27 @@ const styles = StyleSheet.create({
   modalText: {
     marginBottom: 15,
     textAlign: "center",
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: "bold",
+    color: "#343A40",
   },
   modalButtonContainer: {
-    marginTop: 10,
-    width: "60%",
-    alignItems: "center",
+    marginTop: 15,
   },
   modalButton: {
-    backgroundColor: "#17a2b8",
-    borderColor: "#117a8b",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    minWidth: 100,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 30,
+    elevation: 2,
+    backgroundColor: PRIMARY_COLOR,
+  },
+  modalButtonText: {
+    color: "white",
+    fontWeight: "bold",
+    textAlign: "center",
+    fontSize: 16,
   },
   draftContainer: {
-    // Style for the container holding draft numbers
     position: "absolute",
     top: 1,
     left: 1,
@@ -509,16 +438,20 @@ const styles = StyleSheet.create({
     bottom: 1,
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "center",
+    alignContent: "center",
     justifyContent: "center",
-    padding: 1, // Small padding
+    padding: 1,
   },
   draftText: {
-    // Style for the small draft numbers
-    fontSize: cellSize * 0.18, // Much smaller font size
-    lineHeight: cellSize * 0.25, // Adjust line height
-    color: "#6c757d", // Dimmer color
+    fontSize: Math.min(cellSize * 0.2, 10),
+    color: "#6C757D",
     textAlign: "center",
-    width: "33%", // Roughly fit 3 numbers per line
+    width: "33%",
+    height: "33%",
+    lineHeight: Math.min(cellSize * 0.25, 12),
+  },
+  autoFillNumber: {
+    color: "#28A745",
+    fontWeight: "bold",
   },
 });

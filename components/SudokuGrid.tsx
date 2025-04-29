@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleProp,
   ViewStyle,
   TextStyle,
+  StyleSheet,
+  Animated,
 } from "react-native";
 import {
   BoardState,
@@ -16,7 +18,7 @@ import {
 } from "../types/sudokuTypes"; // Adjust path if needed
 import { rows, cols } from "../utils/sudokuUtils";
 
-// Style types for SudokuGrid
+// Style types passed down to SudokuGrid
 interface SudokuGridStyles {
   board: StyleProp<ViewStyle>;
   boardDisabled: StyleProp<ViewStyle>;
@@ -25,8 +27,7 @@ interface SudokuGridStyles {
   selectedCell: StyleProp<ViewStyle>;
   conflictCell: StyleProp<ViewStyle>;
   autoFillingHighlight: StyleProp<ViewStyle>;
-  rightThickBorder: StyleProp<ViewStyle>;
-  bottomThickBorder: StyleProp<ViewStyle>;
+  errorCellBorder?: StyleProp<ViewStyle>;
   cellText: StyleProp<TextStyle>;
   draftContainer: StyleProp<ViewStyle>;
   draftText: StyleProp<TextStyle>;
@@ -44,6 +45,7 @@ interface SudokuGridProps {
   board: BoardState | null;
   initialPuzzleState: BoardState | null;
   selectedCell: SelectedCell | null;
+  errorCell: SelectedCell | null;
   conflicts: Conflicts;
   autoFillingCell: AutoFillingCell;
   draftMarks: DraftMarks;
@@ -53,58 +55,127 @@ interface SudokuGridProps {
   styles: SudokuGridStyles;
 }
 
-const SudokuGrid: React.FC<SudokuGridProps> = ({
-  board,
-  initialPuzzleState,
-  selectedCell,
-  conflicts,
-  autoFillingCell,
-  draftMarks,
-  handleSelectCell,
-  isGameWon,
-  isGameOver,
-  styles,
-}) => {
-  // Function to render a single cell
-  const renderCell = (cellValue: CellValue, row: number, col: number) => {
-    const cellKey = rows[row] + cols[col];
-    const isSelected = selectedCell?.row === row && selectedCell?.col === col;
-    const isConflict = conflicts.has(cellKey);
-    const isFixed = initialPuzzleState?.[row]?.[col] !== 0;
-    const isAutoFilling =
-      autoFillingCell?.r === row && autoFillingCell?.c === col;
-    const currentDraftMarks = draftMarks[cellKey];
+// --- Cell Component (Handles its own borders) ---
+interface CellProps {
+  cellValue: CellValue;
+  row: number;
+  col: number;
+  isSelected: boolean;
+  isConflict: boolean;
+  isFixed: boolean;
+  isAutoFilling: boolean;
+  isErroring: boolean;
+  currentDraftMarks: Set<number> | undefined;
+  handleSelectCell: (row: number, col: number) => void;
+  styles: SudokuGridStyles;
+  isDisabled: boolean;
+}
 
-    const cellStyle: StyleProp<ViewStyle>[] = [styles.cell];
+const Cell: React.FC<CellProps> = React.memo(
+  ({
+    cellValue,
+    row,
+    col,
+    isSelected,
+    isConflict,
+    isFixed,
+    isAutoFilling,
+    isErroring,
+    currentDraftMarks,
+    handleSelectCell,
+    styles,
+    isDisabled,
+  }) => {
+    const shakeAnimation = useRef(new Animated.Value(0)).current;
+    const isMounted = useRef(true);
+
+    // Define border style properties locally
+    const thickBorderWidth = 2;
+    const thickBorderColor =
+      StyleSheet.flatten(styles.board)?.borderColor?.toString() || "#343A40";
+    const errorBorderColor =
+      StyleSheet.flatten(styles.errorCellBorder)?.borderColor?.toString() ||
+      "#DC3545";
+
+    // Trigger shake animation and handle error border timeout
+    useEffect(() => {
+      isMounted.current = true;
+      let timeoutId: NodeJS.Timeout | null = null;
+
+      if (isErroring) {
+        shakeAnimation.setValue(0);
+        Animated.sequence([
+          Animated.timing(shakeAnimation, {
+            toValue: 8,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shakeAnimation, {
+            toValue: -8,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shakeAnimation, {
+            toValue: 8,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+          Animated.timing(shakeAnimation, {
+            toValue: 0,
+            duration: 50,
+            useNativeDriver: true,
+          }),
+        ]).start();
+        // Timeout cleared when isErroring becomes false (handled by parent)
+      }
+      // Cleanup function
+      return () => {
+        isMounted.current = false;
+        shakeAnimation.stopAnimation(); // Stop animation on unmount
+      };
+    }, [isErroring, shakeAnimation]);
+
+    // Determine Cell Styles
+    const cellStyle: StyleProp<ViewStyle>[] = [
+      styles.cell, // Base style now includes thin borders
+    ];
     const textStyle: StyleProp<TextStyle>[] = [styles.cellText];
 
-    // Apply cell background styles
-    if (col === 2 || col === 5) cellStyle.push(styles.rightThickBorder);
-    if (row === 2 || row === 5) cellStyle.push(styles.bottomThickBorder);
-    if (isSelected && !isGameWon && !isGameOver)
-      cellStyle.push(styles.selectedCell);
-    // Show conflict background if the selected number conflicts and the cell is empty
-    if (isConflict && !isGameWon && !cellValue) {
-      cellStyle.push(styles.conflictCell);
-    }
+    // Backgrounds
+    if (isSelected) cellStyle.push(styles.selectedCell);
+    if (isConflict && !cellValue) cellStyle.push(styles.conflictCell);
     if (isAutoFilling) cellStyle.push(styles.autoFillingHighlight);
 
-    let displayContent: React.ReactNode = null;
+    // --- Border Overrides (Apply Thick Block Borders) ---
+    if (col === 2 || col === 5) {
+      cellStyle.push({
+        borderRightWidth: thickBorderWidth,
+        borderRightColor: thickBorderColor,
+      });
+    }
+    if (row === 2 || row === 5) {
+      cellStyle.push({
+        borderBottomWidth: thickBorderWidth,
+        borderBottomColor: thickBorderColor,
+      });
+    }
 
+    // Error Border (Apply only when erroring)
+    if (isErroring) {
+      cellStyle.push({
+        borderWidth: thickBorderWidth,
+        borderColor: errorBorderColor,
+      });
+    }
+
+    // --- Determine Cell Content ---
+    let displayContent: React.ReactNode = null;
     if (cellValue && cellValue !== 0) {
-      // --- Display Main Number ---
-      if (isFixed) {
-        textStyle.push(styles.fixedText);
-      } else {
-        textStyle.push(styles.userNumberText);
-      }
-      if (isAutoFilling) {
-        textStyle.push(styles.autoFillNumber);
-      }
+      if (isFixed) textStyle.push(styles.fixedText);
+      else textStyle.push(styles.userNumberText);
+      if (isAutoFilling) textStyle.push(styles.autoFillNumber);
       displayContent = <Text style={textStyle}>{cellValue}</Text>;
     } else if (currentDraftMarks && currentDraftMarks.size > 0) {
-      // --- Display Draft Marks ---
-      // Sort marks for consistent display order
       const sortedMarks = Array.from(currentDraftMarks).sort((a, b) => a - b);
       displayContent = (
         <View style={styles.draftContainer}>
@@ -116,32 +187,71 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({
         </View>
       );
     }
-    // Else: Cell is empty and has no draft marks, displayContent remains null
 
     return (
       <TouchableOpacity
-        key={cellKey}
         style={cellStyle}
         onPress={() => handleSelectCell(row, col)}
-        disabled={isGameWon || isGameOver || isFixed || board === null}
+        disabled={isDisabled || isFixed}
         activeOpacity={0.7}
       >
-        {displayContent}
+        <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
+          {displayContent}
+        </Animated.View>
       </TouchableOpacity>
     );
-  };
+  }
+);
 
-  // Function to render the grid
-  const renderGridInternal = () => {
+// --- SudokuGrid Component (Renders Rows) ---
+const SudokuGrid: React.FC<SudokuGridProps> = ({
+  board,
+  initialPuzzleState,
+  selectedCell,
+  errorCell,
+  conflicts,
+  autoFillingCell,
+  draftMarks,
+  handleSelectCell,
+  isGameWon,
+  isGameOver,
+  styles,
+}) => {
+  // Function to render the grid using rows
+  const renderGridInRows = () => {
     if (!board) {
-      return <Text style={styles.loadingText}>Loading puzzle...</Text>; // Or some loading indicator
+      return <Text style={styles.loadingText}>Loading puzzle...</Text>;
     }
-
+    const gridDisabled = isGameWon || isGameOver;
     return board.map((rowValues, rowIndex) => (
-      <View key={rowIndex} style={styles.row}>
-        {rowValues.map((cellValue, colIndex) =>
-          renderCell(cellValue, rowIndex, colIndex)
-        )}
+      <View key={`row-${rowIndex}`} style={styles.row}>
+        {rowValues.map((cellValue, colIndex) => {
+          const cellKey = rows[rowIndex] + cols[colIndex];
+          return (
+            <Cell
+              key={cellKey}
+              cellValue={cellValue}
+              row={rowIndex}
+              col={colIndex}
+              isSelected={
+                selectedCell?.row === rowIndex && selectedCell?.col === colIndex
+              }
+              isConflict={conflicts.has(cellKey)}
+              isFixed={initialPuzzleState?.[rowIndex]?.[colIndex] !== 0}
+              isAutoFilling={
+                autoFillingCell?.r === rowIndex &&
+                autoFillingCell?.c === colIndex
+              }
+              isErroring={
+                errorCell?.row === rowIndex && errorCell?.col === colIndex
+              }
+              currentDraftMarks={draftMarks[cellKey]}
+              handleSelectCell={handleSelectCell}
+              styles={styles}
+              isDisabled={gridDisabled}
+            />
+          );
+        })}
       </View>
     ));
   };
@@ -150,7 +260,7 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({
     <View
       style={[styles.board, (isGameWon || isGameOver) && styles.boardDisabled]}
     >
-      {renderGridInternal()}
+      {renderGridInRows()}
     </View>
   );
 };
