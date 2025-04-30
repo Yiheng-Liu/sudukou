@@ -436,8 +436,30 @@ export function useSudokuGame() {
 
           // Add/remove draft mark (only if cell is empty and not conflicting)
           setDraftMarks((prevDrafts) => {
+            console.log("handleSelectCell: Inside setDraftMarks updater");
+            // Log previous state safely
+            try {
+              console.log(
+                "   Prev Drafts:",
+                JSON.stringify(
+                  Object.fromEntries(
+                    Object.entries(prevDrafts).map(([k, v]) => [
+                      k,
+                      Array.from(v),
+                    ])
+                  )
+                )
+              );
+            } catch (e) {
+              console.error("Error logging prevDrafts:", e);
+            }
+
             const newDrafts = { ...prevDrafts };
             const currentMarks = newDrafts[cellKey] ?? new Set<number>();
+            const draftAction = currentMarks.has(selectedNumber)
+              ? "delete"
+              : "add";
+
             if (currentMarks.has(selectedNumber)) {
               currentMarks.delete(selectedNumber);
             } else {
@@ -448,10 +470,25 @@ export function useSudokuGame() {
             } else {
               newDrafts[cellKey] = new Set(currentMarks);
             }
-            console.log(
-              `   DraftMode: Updated draft marks for ${cellKey}:`,
-              newDrafts[cellKey] ? Array.from(newDrafts[cellKey]) : "deleted"
-            );
+
+            console.log(`   Draft Action: ${draftAction} ${selectedNumber}`);
+            // Log new state safely
+            try {
+              console.log(
+                "   New Drafts:",
+                JSON.stringify(
+                  Object.fromEntries(
+                    Object.entries(newDrafts).map(([k, v]) => [
+                      k,
+                      Array.from(v),
+                    ])
+                  )
+                )
+              );
+            } catch (e) {
+              console.error("Error logging newDrafts:", e);
+            }
+
             return newDrafts;
           });
           // REMOVED the logic that cleared the board cell if it had a value
@@ -969,5 +1006,6 @@ export function useSudokuGame() {
     provideHint,
     toggleDraftMode,
     errorCell,
+    currentDifficulty,
   };
 }

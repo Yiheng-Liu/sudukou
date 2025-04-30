@@ -4,9 +4,8 @@ import { View, Text, StyleProp, ViewStyle, TextStyle } from "react-native";
 interface InfoAreaProps {
   livesRemaining: number;
   errorMessage: string | null;
-  isErasing: boolean;
   selectedCell: { row: number; col: number } | null;
-  selectedNumber: number | null;
+  currentDifficulty: number;
   isGameWon: boolean;
   isGameOver: boolean;
   styles: {
@@ -20,19 +19,21 @@ interface InfoAreaProps {
 const InfoArea: React.FC<InfoAreaProps> = ({
   livesRemaining,
   errorMessage,
-  isErasing,
   selectedCell,
-  selectedNumber,
+  currentDifficulty,
   isGameWon,
   isGameOver,
   styles,
 }) => {
-  let statusText = "Selecting";
-  if (isErasing) {
-    statusText = "Erasing";
-  } else if (selectedNumber) {
-    statusText = `Entering ${selectedNumber}`;
-  }
+  // Helper function to map difficulty number to name
+  const getDifficultyName = (difficultyValue: number): string => {
+    if (difficultyValue <= 40) return "Easy"; // Example threshold
+    if (difficultyValue <= 50) return "Medium"; // Example threshold
+    if (difficultyValue <= 60) return "Hard"; // Example threshold
+    return "Extreme";
+  };
+
+  const difficultyName = getDifficultyName(currentDifficulty);
 
   if (isGameWon || isGameOver) return null; // Don't show info area when game is won or over
 
@@ -48,7 +49,7 @@ const InfoArea: React.FC<InfoAreaProps> = ({
           ? `R${selectedCell.row + 1}C${selectedCell.col + 1}`
           : "None"}
       </Text>
-      <Text style={styles.infoText}>Mode: {statusText}</Text>
+      <Text style={styles.infoText}>Difficulty: {difficultyName}</Text>
     </View>
   );
 };
