@@ -195,9 +195,16 @@ const Cell: React.FC<CellProps> = React.memo(
         disabled={isDisabled || isFixed}
         activeOpacity={0.7}
       >
-        <Animated.View style={{ transform: [{ translateX: shakeAnimation }] }}>
-          {displayContent}
-        </Animated.View>
+        {/* Conditionally apply Animated.View wrapper only when erroring */}
+        {isErroring ? (
+          <Animated.View
+            style={{ transform: [{ translateX: shakeAnimation }] }}
+          >
+            {displayContent}
+          </Animated.View>
+        ) : (
+          displayContent // Render content directly when not erroring
+        )}
       </TouchableOpacity>
     );
   }

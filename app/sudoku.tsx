@@ -71,6 +71,7 @@ export default function SudokuScreen() {
     errorCell,
     provideHint,
     toggleDraftMode,
+    currentDifficulty,
   } = useSudokuGame();
 
   // Convert remainingCounts Map to an object for NumberPad prop
@@ -110,9 +111,8 @@ export default function SudokuScreen() {
         <InfoArea
           livesRemaining={livesRemaining}
           errorMessage={errorMessage}
-          isErasing={false}
           selectedCell={selectedCell}
-          selectedNumber={selectedNumber}
+          currentDifficulty={currentDifficulty}
           isGameWon={isGameWon}
           isGameOver={isGameOver}
           styles={{
