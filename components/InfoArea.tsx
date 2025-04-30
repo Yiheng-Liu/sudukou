@@ -1,5 +1,13 @@
 import React from "react";
-import { View, Text, StyleProp, ViewStyle, TextStyle } from "react-native";
+import {
+  View,
+  Text,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
+  StyleSheet,
+} from "react-native";
+import { AntDesign } from "@expo/vector-icons";
 
 interface InfoAreaProps {
   livesRemaining: number;
@@ -39,9 +47,16 @@ const InfoArea: React.FC<InfoAreaProps> = ({
 
   return (
     <View style={styles.infoArea}>
-      <Text style={[styles.infoText, styles.livesText]}>
-        Lives: {livesRemaining}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
+        <AntDesign
+          name="heart"
+          size={14}
+          color={StyleSheet.flatten(styles.livesText)?.color || "#4A90E2"}
+        />
+        <Text style={[styles.infoText, styles.livesText, { marginLeft: 4 }]}>
+          Lives: {livesRemaining}
+        </Text>
+      </View>
       {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
       <Text style={styles.infoText}>
         Selected:{" "}
