@@ -10,6 +10,7 @@ import { useRouter, Link } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useIsFocused } from "@react-navigation/native";
 import { useUser } from "@/context/UserContext";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const SAVED_GAME_KEY = "sudokuGameState";
 
@@ -64,15 +65,23 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerContainer}>
-        {isUserLoading ? (
-          <ActivityIndicator size="small" color={styles.usernameText.color} />
-        ) : username ? (
-          <Link href={"/profile" as any} style={styles.usernameLink}>
-            <Text style={styles.usernameText}>{username}</Text>
-          </Link>
-        ) : (
-          <Text style={styles.usernameText}>?</Text>
-        )}
+        <View style={styles.usernameContainer}>
+          <MaterialCommunityIcons
+            name="account-circle-outline"
+            size={18}
+            color={styles.usernameText.color}
+            style={{ marginRight: 6 }}
+          />
+          {isUserLoading ? (
+            <ActivityIndicator size="small" color={styles.usernameText.color} />
+          ) : username ? (
+            <Link href={"/profile" as any} style={styles.usernameLink}>
+              <Text style={styles.usernameText}>{username}</Text>
+            </Link>
+          ) : (
+            <Text style={styles.usernameText}>?</Text>
+          )}
+        </View>
       </View>
 
       <Text style={styles.title}>Sudoku</Text>
@@ -145,11 +154,18 @@ export default function WelcomeScreen() {
               styles.button,
               styles.continueButton,
               (!hasSavedGame || !isOnline) && styles.buttonDisabled,
+              styles.buttonWithIcon,
               pressed && styles.buttonPressed,
             ]}
             onPress={continueGame}
             disabled={!hasSavedGame || !isOnline}
           >
+            <MaterialCommunityIcons
+              name="play-circle-outline"
+              size={22}
+              color={styles.continueButtonText.color}
+              style={styles.icon}
+            />
             <Text style={[styles.buttonText, styles.continueButtonText]}>
               Continue Game
             </Text>
@@ -159,11 +175,18 @@ export default function WelcomeScreen() {
               styles.button,
               styles.leaderboardButton,
               !isOnline ? styles.buttonDisabled : {},
+              styles.buttonWithIcon,
               pressed && styles.buttonPressed,
             ]}
             disabled={!isOnline}
             onPress={() => router.push("/leaderboard")}
           >
+            <MaterialCommunityIcons
+              name="trophy-outline"
+              size={22}
+              color={styles.leaderboardButtonText.color}
+              style={styles.icon}
+            />
             <Text style={[styles.buttonText, styles.leaderboardButtonText]}>
               Leaderboard
             </Text>
@@ -185,13 +208,27 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     position: "absolute",
-    top: 60,
-    right: 25,
+    top: 50,
+    right: 20,
     zIndex: 10,
   },
-  usernameLink: {
-    padding: 5,
+  usernameContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#DEE2E6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2,
+    minWidth: 40,
   },
+  usernameLink: {},
   usernameText: {
     fontSize: 16,
     fontWeight: "600",
@@ -235,6 +272,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
     elevation: 3,
+    flexDirection: "row",
   },
   difficultyButton: {
     backgroundColor: "#FFFFFF",
@@ -275,5 +313,11 @@ const styles = StyleSheet.create({
   },
   spacer: {
     height: 20,
+  },
+  buttonWithIcon: {
+    justifyContent: "center",
+  },
+  icon: {
+    marginRight: 8,
   },
 });

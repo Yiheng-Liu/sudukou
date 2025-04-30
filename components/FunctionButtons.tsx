@@ -7,6 +7,8 @@ import {
   ViewStyle,
   TextStyle,
 } from "react-native";
+// Import icons
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 // Consider importing an icon library like @expo/vector-icons if you add icons
 
 // Define the styles required by the FunctionButtons component
@@ -60,14 +62,18 @@ const FunctionButtons: React.FC<Props> = ({
           styles.draftButton, // Apply specific style if provided
           isDraftMode && styles.selectedDraftButton,
           isDisabled && styles.boardDisabled, // Apply disabled style
+          { alignItems: "center" }, // Ensure icon and text center
         ]}
         onPress={handleToggleDraftMode}
         disabled={isDisabled}
         activeOpacity={0.7}
       >
-        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
-        {/* <Icon name="pencil" style={styles.iconStyle} /> */}
-        <Text style={[styles.functionButtonText]}>Draft</Text>
+        <MaterialCommunityIcons
+          name="pencil"
+          size={20}
+          style={styles.iconStyle}
+        />
+        <Text style={styles.functionButtonText}>Draft</Text>
       </TouchableOpacity>
 
       {/* Hint Button */}
@@ -76,13 +82,17 @@ const FunctionButtons: React.FC<Props> = ({
           styles.functionButton,
           styles.hintButton, // Apply specific style if provided
           isHintDisabled && styles.boardDisabled, // Apply disabled style
+          { alignItems: "center" },
         ]}
         onPress={handleProvideHint}
         disabled={isHintDisabled}
         activeOpacity={0.7}
       >
-        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
-        {/* <Icon name="lightbulb-on-outline" style={styles.iconStyle} /> */}
+        <MaterialCommunityIcons
+          name="lightbulb-on-outline"
+          size={20}
+          style={styles.iconStyle}
+        />
         <Text style={styles.functionButtonText}>Hint ({hintsRemaining})</Text>
       </TouchableOpacity>
 
@@ -91,13 +101,16 @@ const FunctionButtons: React.FC<Props> = ({
         style={[
           styles.functionButton,
           styles.newGameButton, // Apply specific style if provided
-          // Note: New Game is never disabled in current logic
+          { alignItems: "center" },
         ]}
         onPress={startNewGame}
         activeOpacity={0.7}
       >
-        {/* Add Icon Placeholder here if desired, using styles.iconStyle */}
-        {/* <Icon name="refresh" style={styles.iconStyle} /> */}
+        <MaterialCommunityIcons
+          name="refresh"
+          size={20}
+          style={styles.iconStyle}
+        />
         <Text style={styles.functionButtonText}>New Game</Text>
       </TouchableOpacity>
     </View>
