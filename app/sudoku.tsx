@@ -27,19 +27,45 @@ import NumberPad from "../components/NumberPad";
 import GameModals from "../components/GameModals";
 import InfoArea from "../components/InfoArea";
 
-const { width, height } = Dimensions.get("window"); // Get height too
-// Make board size responsive and capped
+const { width, height } = Dimensions.get("window");
 const boardMaxWidth = 450;
-const availableWidth = width * 0.95;
-const availableHeight = height * 0.55;
 
-// Calculate ideal cell size based on smallest dimension, then floor it
-let idealBoardSize = Math.min(availableWidth, availableHeight, boardMaxWidth);
-let calculatedCellSize = Math.floor(idealBoardSize / 9);
+// Calculate effective available width after all parent paddings
+const screenContainerPaddingH = 10; // from styles.screenContainer.paddingHorizontal
+const contentContainerPaddingH = 10; // from styles.contentContainer.padding (horizontal part)
+const totalPaddingHPerSide = screenContainerPaddingH + contentContainerPaddingH; // 20
+const effectiveAvailableWidth = width - 2 * totalPaddingHPerSide; // width - 40
 
-// Recalculate boardSize to be a precise multiple of the floored cell size
-const boardSize = calculatedCellSize * 9;
-const cellSize = calculatedCellSize; // Use the floored value
+const availableHeight = height * 0.55; // Assuming this height calculation is fine for now
+
+// Calculate initial ideal board size (max space available for the entire board component)
+const initialIdealBoardSize = Math.min(
+  effectiveAvailableWidth,
+  availableHeight,
+  boardMaxWidth
+);
+
+// Base assumption: 0.5px borders are treated as 0.5px in layout sums.
+const OUTER_BOARD_BORDER_WIDTH = 2; // From styles.board.borderWidth
+
+// Total overhead from the main board's own outer border
+const TOTAL_FOOTPRINT_OVERHEAD = 2 * OUTER_BOARD_BORDER_WIDTH;
+// 2 * 2 = 4
+
+// Calculate the TARGET space available for the board's content area (which will be 9 * cellSize)
+const targetBoardContentSpace =
+  initialIdealBoardSize - TOTAL_FOOTPRINT_OVERHEAD;
+
+// Adjust this target space to be the largest multiple of 9 less than or equal to it.
+// This ensures the space for the cells is perfectly divisible by 9.
+const availableSpaceForBoardContent =
+  Math.floor(targetBoardContentSpace / 9) * 9;
+
+// Calculate integer cell size. This will be a whole number because availableSpaceForBoardContent is a multiple of 9.
+const cellSize = availableSpaceForBoardContent / 9;
+
+// The boardSize (content area of styles.board and width of styles.row) is now exactly this multiple of 9.
+const boardSize = availableSpaceForBoardContent;
 
 const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const PRIMARY_COLOR = "#4A90E2"; // Define primary color
@@ -69,8 +95,8 @@ export default function SudokuScreen() {
     handleSelectNumber,
     handleSelectCell,
     errorCell,
-    provideHint,
     toggleDraftMode,
+    provideHint,
     currentDifficulty,
   } = useSudokuGame();
 
@@ -107,21 +133,25 @@ export default function SudokuScreen() {
 
       {/* Main Content Area */}
       <View style={styles.contentContainer}>
-        {/* Info Area (Lives, Error, Status) */}
+        {/* Info Area (Lives, Difficulty, Score - score to be re-added) */}
         <InfoArea
           livesRemaining={livesRemaining}
-          errorMessage={errorMessage}
-          selectedCell={selectedCell}
           currentDifficulty={currentDifficulty}
           isGameWon={isGameWon}
           isGameOver={isGameOver}
           styles={{
             infoArea: styles.infoArea,
             infoText: styles.infoText,
-            errorText: styles.errorText,
             livesText: styles.livesText,
           }}
         />
+
+        {/* Display Error Message Separately Below InfoArea */}
+        {errorMessage && (
+          <View style={styles.errorDisplayContainer}>
+            <Text style={styles.errorDisplayText}>{errorMessage}</Text>
+          </View>
+        )}
 
         {/* Sudoku Grid */}
         <SudokuGrid
@@ -143,6 +173,7 @@ export default function SudokuScreen() {
             selectedCell: styles.selectedCell,
             conflictCell: styles.conflictCell,
             autoFillingHighlight: styles.autoFillingHighlight,
+            errorCellBorder: styles.errorCellBorder,
             cellText: styles.cellText,
             draftContainer: styles.draftContainer,
             draftText: styles.draftText,
@@ -219,8 +250,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: boardSize,
     maxWidth: "100%",
+    paddingRight: "15%",
+    paddingLeft: "15%",
     minHeight: 35,
-    marginBottom: 15,
+    marginBottom: 10,
     paddingHorizontal: 10,
     backgroundColor: "#FFFFFF",
     borderRadius: 8,
@@ -242,13 +275,18 @@ const styles = StyleSheet.create({
     color: PRIMARY_COLOR,
     fontWeight: "bold",
   },
-  errorText: {
+  errorDisplayContainer: {
+    width: boardSize,
+    maxWidth: "100%",
+    alignItems: "center",
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  errorDisplayText: {
     fontSize: 14,
     color: ERROR_COLOR,
     fontWeight: "bold",
     textAlign: "center",
-    flexShrink: 1,
-    marginHorizontal: 10,
   },
   board: {
     width: boardSize,
@@ -258,13 +296,13 @@ const styles = StyleSheet.create({
     borderColor: "#343A40",
     borderRadius: 4,
     marginBottom: 20,
-    overflow: "hidden",
   },
   boardDisabled: {
     opacity: 0.6,
   },
   row: {
     flexDirection: "row",
+    flexShrink: 1,
   },
   cell: {
     width: cellSize,
@@ -272,6 +310,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: "#E0E0E0",
     alignItems: "center",
+    flexShrink: 1,
     justifyContent: "center",
     backgroundColor: "transparent",
   },
@@ -283,6 +322,9 @@ const styles = StyleSheet.create({
   },
   autoFillingHighlight: {
     backgroundColor: "#FEF9E7",
+  },
+  errorCellBorder: {
+    borderColor: ERROR_COLOR,
   },
   cellText: {
     fontSize: Math.min(cellSize * 0.5, 24),

@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Animated,
 } from "react-native";
+import { MaterialCommunityIcons } from "@expo/vector-icons"; // Import icons
 import {
   BoardState,
   SelectedCell,
@@ -89,15 +90,10 @@ const Cell: React.FC<CellProps> = React.memo(
     const shakeAnimation = useRef(new Animated.Value(0)).current;
     const isMounted = useRef(true);
 
-    // Define border style properties locally
     const thickBorderWidth = 2;
     const thickBorderColor =
       StyleSheet.flatten(styles.board)?.borderColor?.toString() || "#343A40";
-    const errorBorderColor =
-      StyleSheet.flatten(styles.errorCellBorder)?.borderColor?.toString() ||
-      "#DC3545";
 
-    // Trigger shake animation and handle error border timeout
     useEffect(() => {
       isMounted.current = true;
       let timeoutId: NodeJS.Timeout | null = null;
@@ -135,18 +131,13 @@ const Cell: React.FC<CellProps> = React.memo(
       };
     }, [isErroring, shakeAnimation]);
 
-    // Determine Cell Styles
-    const cellStyle: StyleProp<ViewStyle>[] = [
-      styles.cell, // Base style now includes thin borders
-    ];
+    const cellStyle: StyleProp<ViewStyle>[] = [styles.cell];
     const textStyle: StyleProp<TextStyle>[] = [styles.cellText];
 
-    // Backgrounds
     if (isSelected) cellStyle.push(styles.selectedCell);
     if (isConflict && !cellValue) cellStyle.push(styles.conflictCell);
     if (isAutoFilling) cellStyle.push(styles.autoFillingHighlight);
 
-    // --- Border Overrides (Apply Thick Block Borders) ---
     if (col === 2 || col === 5) {
       cellStyle.push({
         borderRightWidth: thickBorderWidth,
@@ -160,15 +151,6 @@ const Cell: React.FC<CellProps> = React.memo(
       });
     }
 
-    // Error Border (Apply only when erroring)
-    if (isErroring) {
-      cellStyle.push({
-        borderWidth: thickBorderWidth,
-        borderColor: errorBorderColor,
-      });
-    }
-
-    // --- Determine Cell Content ---
     let displayContent: React.ReactNode = null;
     if (cellValue && cellValue !== 0) {
       if (isFixed) textStyle.push(styles.fixedText);
@@ -188,6 +170,8 @@ const Cell: React.FC<CellProps> = React.memo(
       );
     }
 
+    const ERROR_ICON_COLOR = "#DC3545"; // Use the defined error color
+
     return (
       <TouchableOpacity
         style={cellStyle}
@@ -195,16 +179,35 @@ const Cell: React.FC<CellProps> = React.memo(
         disabled={isDisabled || isFixed}
         activeOpacity={0.7}
       >
-        {/* Conditionally apply Animated.View wrapper only when erroring */}
-        {isErroring ? (
-          <Animated.View
-            style={{ transform: [{ translateX: shakeAnimation }] }}
-          >
-            {displayContent}
-          </Animated.View>
-        ) : (
-          displayContent // Render content directly when not erroring
-        )}
+        <Animated.View
+          style={[
+            {
+              width: "100%",
+              height: "100%",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            isErroring && { transform: [{ translateX: shakeAnimation }] },
+          ]}
+        >
+          {displayContent}
+          {isErroring && (
+            <MaterialCommunityIcons
+              name="close"
+              size={
+                Math.min(
+                  StyleSheet.flatten(styles.cellText).fontSize || 24,
+                  24
+                ) * 1.2
+              } // Adjust size based on cellText or a fixed value
+              color={ERROR_ICON_COLOR}
+              style={{
+                position: "absolute", // Position on top
+                // backgroundColor: 'rgba(255,255,255,0.3)' // Optional: slight background for visibility
+              }}
+            />
+          )}
+        </Animated.View>
       </TouchableOpacity>
     );
   }
