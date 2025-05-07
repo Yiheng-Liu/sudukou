@@ -54,7 +54,7 @@ export function useSudokuGame() {
   const [errorCell, setErrorCell] = useState<SelectedCell>(null);
   const [isGameWon, setIsGameWon] = useState<boolean>(false);
   const [isGameOver, setIsGameOver] = useState<boolean>(false);
-  const [livesRemaining, setLivesRemaining] = useState<number>(3);
+  const [livesRemaining, setLivesRemaining] = useState<number>(2);
   const [hintsRemaining, setHintsRemaining] = useState<number>(3);
   const [currentDifficulty, setCurrentDifficulty] = useState<number>(50);
   const [remainingCounts, setRemainingCounts] = useState<Map<number, number>>(
@@ -139,7 +139,7 @@ export function useSudokuGame() {
       setAutoFillingCell(null);
       setIsGameWon(false);
       setIsGameOver(false);
-      setLivesRemaining(3);
+      setLivesRemaining(2);
       setHintsRemaining(3);
       setCurrentDifficulty(difficulty as number);
       setBoard(null); // Clear board initially
@@ -254,7 +254,7 @@ export function useSudokuGame() {
               setBoard(savedState.board);
               setInitialPuzzleState(savedState.initialPuzzleState);
               setSolution(savedState.solution);
-              setLivesRemaining(savedState.livesRemaining ?? 3);
+              setLivesRemaining(savedState.livesRemaining ?? 2);
               setHintsRemaining(savedState.hintsRemaining ?? 3);
               setCurrentDifficulty(savedState.difficulty ?? 50);
               setDraftMarks(deserializedDraftMarks); // Use deserialized marks
@@ -290,7 +290,8 @@ export function useSudokuGame() {
 
     loadGame();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [difficultyParam, initializeNewGame]); // Run only once on mount based on difficultyParam presence
+  }, [difficultyParam]); // Removed initializeNewGame from deps as it causes re-runs
+  // initializeNewGame is stable due to its own useCallback deps
 
   // --- Save Game State ---
   const saveGameState = useCallback(async () => {

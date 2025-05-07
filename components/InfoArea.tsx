@@ -11,23 +11,18 @@ import { AntDesign } from "@expo/vector-icons";
 
 interface InfoAreaProps {
   livesRemaining: number;
-  errorMessage: string | null;
-  selectedCell: { row: number; col: number } | null;
   currentDifficulty: number;
   isGameWon: boolean;
   isGameOver: boolean;
   styles: {
     infoArea: StyleProp<ViewStyle>;
     infoText: StyleProp<TextStyle>;
-    errorText: StyleProp<TextStyle>;
     livesText: StyleProp<TextStyle>;
   };
 }
 
 const InfoArea: React.FC<InfoAreaProps> = ({
   livesRemaining,
-  errorMessage,
-  selectedCell,
   currentDifficulty,
   isGameWon,
   isGameOver,
@@ -42,28 +37,19 @@ const InfoArea: React.FC<InfoAreaProps> = ({
   };
 
   const difficultyName = getDifficultyName(currentDifficulty);
+  const livesColor = StyleSheet.flatten(styles.livesText)?.color || "#4A90E2";
 
-  if (isGameWon || isGameOver) return null; // Don't show info area when game is won or over
+  if (isGameWon || isGameOver) return null;
 
   return (
-    <View style={styles.infoArea}>
+    <View style={[styles.infoArea, { justifyContent: "space-between" }]}>
       <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <AntDesign
-          name="heart"
-          size={14}
-          color={StyleSheet.flatten(styles.livesText)?.color || "#4A90E2"}
-        />
+        <AntDesign name="heart" size={14} color={livesColor} />
         <Text style={[styles.infoText, styles.livesText, { marginLeft: 4 }]}>
           Lives: {livesRemaining}
         </Text>
       </View>
-      {errorMessage && <Text style={styles.errorText}>{errorMessage}</Text>}
-      <Text style={styles.infoText}>
-        Selected:{" "}
-        {selectedCell
-          ? `R${selectedCell.row + 1}C${selectedCell.col + 1}`
-          : "None"}
-      </Text>
+
       <Text style={styles.infoText}>Difficulty: {difficultyName}</Text>
     </View>
   );
