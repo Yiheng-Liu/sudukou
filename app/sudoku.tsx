@@ -313,12 +313,14 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     justifyContent: "center",
     backgroundColor: "transparent",
+    zIndex: 1,
   },
   selectedCell: {
     backgroundColor: "#D6EAF8",
   },
   conflictCell: {
     backgroundColor: "#FADBD8",
+    zIndex: 0,
   },
   autoFillingHighlight: {
     backgroundColor: "#FEF9E7",

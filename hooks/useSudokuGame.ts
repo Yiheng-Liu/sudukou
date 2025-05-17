@@ -128,6 +128,35 @@ export function useSudokuGame() {
     []
   );
 
+  // --- Helper to clean up draft marks after a cell is filled ---
+  function cleanupDraftMarksAfterFill(
+    setDraftMarksFn: React.Dispatch<React.SetStateAction<DraftMarks>>,
+    row: number,
+    col: number,
+    filledNumber: number
+  ) {
+    const cellKey = rows[row] + cols[col];
+    const peerKeys = peers[cellKey];
+    setDraftMarksFn((prevDrafts: DraftMarks) => {
+      const newDrafts: DraftMarks = { ...prevDrafts };
+      // Remove drafts from the filled cell
+      delete newDrafts[cellKey];
+      // Remove the filled number from peer cells' draft marks
+      peerKeys.forEach((peerKey) => {
+        if (newDrafts[peerKey]) {
+          newDrafts[peerKey] = new Set(
+            Array.from(newDrafts[peerKey]).filter((num) => num !== filledNumber)
+          );
+          // Remove empty draft sets
+          if (newDrafts[peerKey].size === 0) {
+            delete newDrafts[peerKey];
+          }
+        }
+      });
+      return newDrafts;
+    });
+  }
+
   // --- Game Logic Handlers ---
 
   // Extracted core game initialization logic
@@ -706,6 +735,30 @@ export function useSudokuGame() {
       calculateRemainingCounts(newBoard);
       calculateConflicts(selectedNumber, newBoard); // Recalculate conflicts for the currently selected number
 
+      // Update draft marks - remove the hint number from peer cells' draft marks
+      const cellKey = rows[row] + cols[col];
+      const peerKeys = peers[cellKey];
+      setDraftMarks((prevDrafts) => {
+        const newDrafts = { ...prevDrafts };
+        // Remove drafts from the filled cell
+        delete newDrafts[cellKey];
+        // Remove the hint number from peer cells' draft marks
+        peerKeys.forEach((peerKey) => {
+          if (newDrafts[peerKey]) {
+            newDrafts[peerKey] = new Set(
+              Array.from(newDrafts[peerKey]).filter(
+                (num) => num !== correctValue
+              )
+            );
+            // Remove empty draft sets
+            if (newDrafts[peerKey].size === 0) {
+              delete newDrafts[peerKey];
+            }
+          }
+        });
+        return newDrafts;
+      });
+
       // Clear selection and error messages after hint
       setSelectedCell(null);
       clearError();
@@ -727,12 +780,11 @@ export function useSudokuGame() {
     isGameOver,
     board,
     solution,
-    selectedNumber, // Added dependency
+    selectedNumber,
     calculateRemainingCounts,
-    calculateConflicts, // Added dependency
-    clearError, // Added dependency
-    setErrorMessage, // Added dependency
-    // Removed setHintsRemaining, setBoard, setSelectedCell from deps
+    calculateConflicts,
+    clearError,
+    setErrorMessage,
   ]);
 
   // --- Update Record Logic --- (Defined outside useEffect)
@@ -868,6 +920,8 @@ export function useSudokuGame() {
           // Double check cell is still empty before filling
           if (newBoard[r][c] === 0 || newBoard[r][c] === null) {
             newBoard[r][c] = num;
+            // Clean up draft marks after auto-fill
+            cleanupDraftMarksAfterFill(setDraftMarks, r, c, num);
           }
           return newBoard;
         });
@@ -965,8 +1019,16 @@ export function useSudokuGame() {
             setBoard((currentBoard) => {
               if (!currentBoard) return null;
               const newBoard = currentBoard.map((row) => [...row]);
-              if (!newBoard[target.r][target.c])
+              if (!newBoard[target.r][target.c]) {
                 newBoard[target.r][target.c] = num;
+                // Clean up draft marks after auto-fill
+                cleanupDraftMarksAfterFill(
+                  setDraftMarks,
+                  target.r,
+                  target.c,
+                  num
+                );
+              }
               return newBoard;
             });
             setAutoFillingCell(null);
