@@ -138,19 +138,6 @@ const Cell: React.FC<CellProps> = React.memo(
     if (isConflict && !cellValue) cellStyle.push(styles.conflictCell);
     if (isAutoFilling) cellStyle.push(styles.autoFillingHighlight);
 
-    if (col === 2 || col === 5) {
-      cellStyle.push({
-        borderRightWidth: thickBorderWidth,
-        borderRightColor: thickBorderColor,
-      });
-    }
-    if (row === 2 || row === 5) {
-      cellStyle.push({
-        borderBottomWidth: thickBorderWidth,
-        borderBottomColor: thickBorderColor,
-      });
-    }
-
     let displayContent: React.ReactNode = null;
     if (cellValue && cellValue !== 0) {
       if (isFixed) textStyle.push(styles.fixedText);
@@ -266,11 +253,73 @@ const SudokuGrid: React.FC<SudokuGridProps> = ({
     ));
   };
 
+  // Overlay for 3x3 thick borders
+  // Get board size from styles.board
+  const boardStyle = StyleSheet.flatten(styles.board) || {};
+  const boardWidth =
+    typeof boardStyle.width === "number" ? boardStyle.width : 0;
+  const boardHeight =
+    typeof boardStyle.height === "number" ? boardStyle.height : 0;
+  const thickBorderWidth = 2;
+  const thickBorderColor = boardStyle.borderColor || "#343A40";
+  const cellSize = boardWidth / 9;
+
+  // Draw 4 vertical and 4 horizontal lines at 0, 3, 6, 9
+  const lines = [];
+  // Vertical lines
+  for (let i = 0; i <= 9; i += 3) {
+    lines.push(
+      <View
+        key={`vline-${i}`}
+        style={{
+          position: "absolute",
+          left:
+            i === 9
+              ? boardWidth - thickBorderWidth
+              : cellSize * i - (i === 0 ? 0 : thickBorderWidth / 2),
+          top: 0,
+          width: thickBorderWidth,
+          height: boardHeight,
+          backgroundColor: thickBorderColor,
+          zIndex: 10,
+        }}
+        pointerEvents="none"
+      />
+    );
+  }
+  // Horizontal lines
+  for (let i = 0; i <= 9; i += 3) {
+    lines.push(
+      <View
+        key={`hline-${i}`}
+        style={{
+          position: "absolute",
+          top:
+            i === 9
+              ? boardHeight - thickBorderWidth
+              : cellSize * i - (i === 0 ? 0 : thickBorderWidth / 2),
+          left: 0,
+          height: thickBorderWidth,
+          width: boardWidth,
+          backgroundColor: thickBorderColor,
+          zIndex: 10,
+        }}
+        pointerEvents="none"
+      />
+    );
+  }
+
   return (
     <View
-      style={[styles.board, (isGameWon || isGameOver) && styles.boardDisabled]}
+      style={[
+        styles.board,
+        (isGameWon || isGameOver) && styles.boardDisabled,
+        { position: "relative", borderWidth: 0 }, // Remove board border
+      ]}
     >
       {renderGridInRows()}
+      {/* Overlay for 3x3 thick borders */}
+      {boardWidth > 0 && boardHeight > 0 && lines}
     </View>
   );
 };
